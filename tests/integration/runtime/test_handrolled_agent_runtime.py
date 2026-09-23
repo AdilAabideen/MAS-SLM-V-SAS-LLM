@@ -5,13 +5,20 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from pydantic import BaseModel
 
 from app.agentic.AgentRuntime import AgentKernel
 from app.agentic.runtime.runtime_config import RuntimeConfig
+from app.agentic.telemetry import token_estimator
 from tests.doubles.fake_emitters import Collector
 from tests.doubles.fake_provider import FakeChatModel
+
+
+@pytest.fixture(autouse=True)
+def offline_token_estimation(monkeypatch):
+    """Keep scripted runtime tests independent of tokenizer downloads."""
+    monkeypatch.setattr(token_estimator, "tiktoken", None)
 
 
 class OutputSchema(BaseModel):
@@ -53,6 +60,8 @@ def test_it_run_001_one_step_tool_call_then_final_answer_tool_succeeds():
     agent = AgentKernel(model=model, tools=[lookup_value, final_answer], response_format=OutputSchema)
     output = asyncio.run(agent.ainvoke("hello"))
     assert output == {"recommendation": {"value": "abc"}, "ok": True}
+    assert len(model.messages_seen) == 2
+    assert any(isinstance(message, ToolMessage) for message in model.messages_seen[1])
 
 
 @pytest.mark.integration
@@ -106,8 +115,15 @@ def test_it_run_005_malformed_tool_call_triggers_retry_feedback_and_then_succeed
         response_format=OutputSchema,
         event_handlers=[events],
     )
+    agent.set_event_context(run_id="scripted_case", agent_name="baseline")
     output = asyncio.run(agent.ainvoke("hello"))
     assert output["recommendation"]["value"] == "retry"
+    assert len(model.messages_seen) == 3
+    assert any(
+        event["event_type"] == "runtime_decision"
+        and event["payload_json"]["decision"] == "retry_after_malformed_tool_call"
+        for event in events.items
+    )
 
 
 @pytest.mark.integration
@@ -244,3 +260,21 @@ def test_it_run_010_values_stream_reflects_done_false_then_done_true():
     values = [data for mode, data in items if mode == "values"]
     assert values[0]["done"] is False
     assert values[-1]["done"] is True
+
+
+@pytest.mark.integration
+@pytest.mark.runtime
+def test_it_run_011_provider_exception_is_recorded_and_propagated():
+    """A scripted provider failure remains observable without a live model."""
+    metrics = Collector()
+    model = FakeChatModel([RuntimeError("provider unavailable")])
+    agent = AgentKernel(model=model, tools=[], llm_call_handlers=[metrics])
+    agent.set_event_context(run_id="scripted_case", agent_name="baseline")
+
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        asyncio.run(agent.ainvoke("hello"))
+
+    assert len(model.messages_seen) == 1
+    assert len(metrics.items) == 1
+    assert metrics.items[0]["error_text"] == "provider unavailable"
+    assert metrics.items[0]["run_id"] == "scripted_case"
