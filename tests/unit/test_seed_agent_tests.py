@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
+from tests.backend_fixtures import db_engine, db_session, session_factory, sqlite_url  # noqa: F401
+
 from app.models.agent_test_case import AgentTestCase
 from app.seed_agent_tests import (
     SINGLE_AGENT_NAME,
