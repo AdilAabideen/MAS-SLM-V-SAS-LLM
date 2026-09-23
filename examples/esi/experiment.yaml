@@ -51,8 +51,8 @@ mas:
   workflow: workflow.yaml
 
 dataset:
-  loader: jsonl
-  path: ../../data/cases.jsonl
+  loader: esi.jsonl_v1
+  path: cases.jsonl
 grader: esi.final_acuity_v1
 repetitions: 1
 schedule: system_major

@@ -19,7 +19,6 @@ EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "esi"
 def _registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     register_builtin_components(registry)
-    registry.register("dataset_loaders", "jsonl", lambda path: [])
     return registry
 
 
@@ -55,7 +54,7 @@ def test_valid_esi_split_config_resolves_without_inference_or_secrets(tmp_path: 
 
     assert loaded.workflow == ESI_MAS
     assert loaded.workflow_path == workflow
-    assert loaded.dataset_path == (tmp_path / "../../data/cases.jsonl").resolve()
+    assert loaded.dataset_path == tmp_path / "cases.jsonl"
     assert loaded.models["baseline"].model_id == "gpt-test-baseline"
     assert loaded.experiment.sas.agent == "baseline"
     assert loaded.experiment.mas.agents["doctor_agent"] == "doctor"

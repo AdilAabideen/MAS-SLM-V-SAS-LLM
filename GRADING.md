@@ -31,8 +31,9 @@ and `grade_case(grader, expected=..., result=...)`. Every attempt receives a
 `GradeResult`: `graded`, `execution_failed`, or `grader_error`. Execution
 failure keeps its provider/tool/runtime classification and scores zero;
 grader errors have unknown judgment and score. `aggregate_grades` passes all
-case-grade records to the grader's aggregate hook. Dataset validation of
-expected labels before inference is added by the dataset ticket.
+case-grade records to the grader's aggregate hook. The registered dataset
+loader validates selected expected labels before inference; see
+[`DATASETS.md`](DATASETS.md).
 
 The built-in `esi.final_acuity_v1` grader applies the preserved exact-acuity
 rule to the final `final_esi_level` from either SAS or MAS. Its summary reports

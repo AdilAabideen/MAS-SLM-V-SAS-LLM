@@ -35,6 +35,10 @@ schemas are also registered. Use `registry.inventory()` or
 `registry.ids(kind)` to see effective IDs, and `registry.resolve(kind, id)` to
 obtain an implementation.
 
+The built-in dataset loaders are `jsonl` and `esi.jsonl_v1`. A registered
+loader receives a local path and yields case records with separate `input`
+and `expected` fields; see [`DATASETS.md`](DATASETS.md).
+
 The grader contract is now `BaseGrader` or a structurally compatible object
 with the same three methods. See [`GRADING.md`](GRADING.md). The built-in
 `esi.final_acuity_v1` grader scores the same final task for both systems;

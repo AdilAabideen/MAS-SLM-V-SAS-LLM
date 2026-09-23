@@ -31,7 +31,6 @@ ENV = {
 def _esi_registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     register_builtin_components(registry)
-    registry.register("dataset_loaders", "jsonl", lambda path: [])
     return registry
 
 
