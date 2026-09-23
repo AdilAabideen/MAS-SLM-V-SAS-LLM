@@ -48,3 +48,13 @@ level model choices and the MAS default use this precedence: role override,
 agent model, then MAS default. `build_configured_systems(loaded)` constructs
 the SAS and MAS case runners. The optional `model_factory(resolved_model, role)`
 argument supplies offline fake models without connecting to a provider.
+
+Call `inspect_configuration(loaded)` before spending inference resources. Its
+`concise` view shows each SAS/MAS model, agent definition, provider checkpoint,
+tool order, payload builder/schema, route, gate, and runtime policy. Its
+`details` view adds the exact assembled prompts and tool descriptions/JSON
+schemas. `render(details=False)` and `render(details=True)` return formatted
+JSON. The preview constructs the actual kernels with an inert model whose
+inference method raises if called; it never instantiates a registered provider.
+For the preserved vLLM adapter it shows both configured model settings and
+the current effective request values, including the known 250-token cap.
