@@ -8,8 +8,8 @@ from typing import Any, Mapping, Optional, Sequence
 
 from langchain_core.messages import ToolMessage
 
-from app.agentic.handoff import HandoffResult
-from app.agentic.mas_contract import HandoffEnvelope
+from mas_slm_research.mas_contract import HandoffEnvelope, HandoffResult
+from mas_slm_research.workflows.definition import WorkflowDefinition
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,7 @@ class HandoffPolicy:
         self,
         *,
         handoff_tool_names: Sequence[str] | None = None,
+        workflow: WorkflowDefinition | None = None,
     ) -> None:
         """Handle the value."""
         # Keep the main step clear.
@@ -38,6 +39,9 @@ class HandoffPolicy:
             for name in list(handoff_tool_names or [])
             if isinstance(name, str) and name.strip()
         }
+        if self.handoff_tool_names and workflow is None:
+            raise ValueError("handoff tools require a resolved workflow")
+        self.workflow = workflow
 
     def is_handoff_tool(self, tool_name: str | None) -> bool:
         """Handle handoff tool."""
@@ -87,6 +91,8 @@ class HandoffPolicy:
                 payload_schema=result.payload_schema,
                 payload=result.payload,
             )
+            if self.workflow is not None:
+                envelope.validate_for(self.workflow)
         except Exception as exc:
             return HandoffDecision(
                 should_handoff=False,
