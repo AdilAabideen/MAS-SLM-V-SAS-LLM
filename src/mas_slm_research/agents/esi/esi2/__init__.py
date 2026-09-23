@@ -1,0 +1,1 @@
+"""Preserved ESI role assets."""

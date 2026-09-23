@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from pydantic import BaseModel
 
 from mas_slm_research.configuration import ConfigurationError, load_configuration
 from mas_slm_research.registry import ComponentRegistry, register_builtin_components
@@ -17,21 +16,9 @@ from mas_slm_research.workflows.esi.definition import ESI_MAS
 EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "esi"
 
 
-class _Schema(BaseModel):
-    value: str | None = None
-
-
 def _registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     register_builtin_components(registry)
-    for agent in ("single_agent", "esi1", "esi2", "esi345", "vitals", "doctor"):
-        registry.register("agents", f"esi.{agent}_v1", lambda **kwargs: None)
-    workflow = yaml.safe_load((EXAMPLE / "workflow.yaml").read_text(encoding="utf-8"))
-    for payload in workflow["payloads"].values():
-        registry.register("schemas", payload["input_schema"], _Schema)
-    for routes in workflow["handoff_schemas"].values():
-        for schema_id in routes.values():
-            registry.register("schemas", schema_id, _Schema)
     registry.register("dataset_loaders", "jsonl", lambda path: [])
     registry.register("graders", "esi.final_acuity_v1", lambda: object())
     return registry
@@ -41,6 +28,8 @@ def _env() -> dict[str, str]:
     return {
         "BASELINE_MODEL_ID": "gpt-test-baseline",
         "BASELINE_API_KEY": "secret-baseline-123",
+        "BASELINE_AZURE_ENDPOINT": "https://azure.invalid",
+        "BASELINE_AZURE_API_VERSION": "2024-02-01",
         "SPECIALIST_MODEL_ID": "medgemma-test",
         "SPECIALIST_API_KEY": "secret-specialist-456",
         "SPECIALIST_BASE_URL": "https://provider.invalid/api",

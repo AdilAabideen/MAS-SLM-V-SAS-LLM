@@ -13,14 +13,14 @@ call. Start with `ComponentRegistry()` and `register_builtin_components(...)`,
 then explicitly register your own implementations or list extension modules
 under `extensions`. An extension module must export
 `register_components(registry)`; there is no automatic discovery or executable
-YAML expression. The ESI agent, schema, dataset, and grader adapters are being
-connected in the next construction and experiment tickets. Until then, the
-included ESI files are a validated configuration contract, not a runnable
-benchmark by themselves.
+YAML expression. The ESI agents, tools, schemas, workflow, and payload builders
+are registered now. Dataset and grader registrations are completed by the
+experiment tickets, so the included ESI files are a validated system contract
+but not yet a runnable dataset benchmark by themselves.
 
 Each model entry chooses one of `model_env`, `model_id`, or `catalog`. A
 `model_env` points to an environment variable containing the provider model ID.
-`api_key_env` and `base_url_env` name variables whose values must be present;
+`api_key_env`, `base_url_env`, and `api_version_env` name variables whose values must be present;
 the resolved specification stores those names, never their values. The loader
 resolves the workflow, dataset, and output paths relative to the experiment
 file. `safe_snapshot()` contains the chosen IDs, model names, graph, and paths
@@ -34,8 +34,17 @@ instance, the declarative graph must match it exactly; a disagreement is an
 error rather than a silently ignored override. Error messages include the
 declaring filename and the relevant field or route.
 
+Per-role `payloads.<role>.input_schema` identifies the legacy case-input
+contract for inspection; it is resolved at load time. The preserved ESI graph
+does not enforce those strict models on each projected payload because its
+case text can have missing observations. Generated handoff tools do enforce
+the route-specific `handoff_schemas`. Dataset validation and case projection
+are introduced by the experiment tickets.
+
 The `sas.model` selection is explicit. If its agent also declares `model`, the
 two must agree. For MAS, each role names an agent under `mas.agents`;
 `mas.model_overrides` can select a different configured model per role. Agent
-level model choices, the MAS default, and effective precedence will be applied
-and shown by the system constructor and preview tickets.
+level model choices and the MAS default use this precedence: role override,
+agent model, then MAS default. `build_configured_systems(loaded)` constructs
+the SAS and MAS case runners. The optional `model_factory(resolved_model, role)`
+argument supplies offline fake models without connecting to a provider.

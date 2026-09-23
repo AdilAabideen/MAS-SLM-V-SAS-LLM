@@ -64,6 +64,8 @@ class ComponentRegistry:
                 callable(getattr(component, "evaluate", None))
                 and callable(getattr(component, "aggregate", None))
             )
+        elif kind == "agents":
+            valid = callable(component) or callable(getattr(component, "build_kernel", None))
         elif kind == "tools":
             valid = callable(component) or callable(getattr(component, "invoke", None))
         else:
@@ -116,15 +118,23 @@ class ComponentRegistry:
 
 def register_builtin_components(registry: ComponentRegistry) -> None:
     """Register preserved, backend-independent ESI workflow and model assets."""
-    from .model_registry import build_registered_model, list_registered_models
+    from .model_factory import builtin_provider_factory
+    from .model_registry import list_registered_models
+    from .agents.esi.definitions import ESI_AGENTS, ESI_SCHEMAS, ESI_TOOLS
     from .workflows.esi.definition import ESI_MAS
     from .workflows.esi.payload_builder import build_pending_agent_payload, payload_builders
 
     registry.register("workflows", "esi.legacy_v1", ESI_MAS)
     registry.register("payload_builders", "esi.legacy_v1", build_pending_agent_payload)
     for provider_id in ("openai", "dr7", "vllm"):
-        registry.register("providers", provider_id, build_registered_model)
+        registry.register("providers", provider_id, builtin_provider_factory(provider_id))
     for role, builder in payload_builders.items():
         registry.register("payload_builders", f"esi.{role}_v1", builder)
     for model in list_registered_models():
         registry.register("models", model.id, model)
+    for identifier, definition in ESI_AGENTS.items():
+        registry.register("agents", identifier, definition)
+    for identifier, schema in ESI_SCHEMAS.items():
+        registry.register("schemas", identifier, schema)
+    for identifier, tool in ESI_TOOLS.items():
+        registry.register("tools", identifier, tool)

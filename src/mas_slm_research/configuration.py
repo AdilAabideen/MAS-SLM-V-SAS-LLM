@@ -40,6 +40,7 @@ class ModelConfig(_StrictSpec):
     catalog: str | None = None
     api_key_env: str | None = None
     base_url_env: str | None = None
+    api_version_env: str | None = None
     temperature: float | None = None
     max_tokens: int | None = Field(default=None, ge=1)
 
@@ -163,6 +164,7 @@ class ResolvedModel:
     catalog: str | None
     api_key_env: str | None
     base_url_env: str | None
+    api_version_env: str | None
     temperature: float | None
     max_tokens: int | None
 
@@ -437,13 +439,18 @@ def load_configuration(
         )
         if not model_id:
             raise ConfigurationError(f"{path}: models.{name}: no model ID resolved")
-        for field, env_name in (("api_key_env", model.api_key_env), ("base_url_env", model.base_url_env)):
+        for field, env_name in (
+            ("api_key_env", model.api_key_env),
+            ("base_url_env", model.base_url_env),
+            ("api_version_env", model.api_version_env),
+        ):
             if env_name:
                 _env_value(env_name, env, path, f"models.{name}.{field}")
         resolved[name] = ResolvedModel(
             name=name, provider=model.provider, model_id=model_id,
             model_env=model.model_env, catalog=model.catalog,
             api_key_env=model.api_key_env, base_url_env=model.base_url_env,
+            api_version_env=model.api_version_env,
             temperature=model.temperature, max_tokens=model.max_tokens,
         )
     return LoadedConfiguration(
