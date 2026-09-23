@@ -255,6 +255,22 @@ class InMemoryMASTracker:
             record.measurements = summary
             return summary
 
+    def fail_unfinished(self, *, error_text: str) -> None:
+        """Close child records if graph execution stops outside a node outcome."""
+        with self._lock:
+            for record in self.agent_records.values():
+                if record.status != "running":
+                    continue
+                record.status = "failed"
+                record.finished_at = self.clock()
+                record.error_text = error_text
+                record.output = {"error": "graph_execution_failed", "detail": error_text}
+                self._emit(
+                    "agent_completed", agent_run_id=record.agent_run_id,
+                    agent_name=record.agent_name, status="failed",
+                    payload_json={"error": error_text},
+                )
+
     def _record_handoff(self, record: AgentRecord, handoff: HandoffEnvelope) -> str:
         handoff_id = self.id_factory()
         self.handoff_records[handoff_id] = HandoffRecord(

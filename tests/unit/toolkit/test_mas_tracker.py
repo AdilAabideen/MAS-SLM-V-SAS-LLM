@@ -151,3 +151,16 @@ def test_failing_observation_sink_cannot_erase_core_child_record():
     assert tracker.agent_records[tracked.agent_run_id].status == "running"
     assert tracker.events[0]["event_type"] == "agent_started"
     assert tracker.sink_errors == ["observer unavailable"]
+
+
+@pytest.mark.unit
+def test_aborted_graph_closes_any_started_child():
+    tracker = InMemoryMASTracker(workflow=parallel_workflow(), mas_run_id="mas-abort")
+    tracked = tracker.begin_agent_execution(
+        agent_name="acuity", state=make_initial_mas_state({}), pending_agent_payload={},
+    )
+    tracker.fail_unfinished(error_text="graph stopped")
+    record = tracker.agent_records[tracked.agent_run_id]
+    assert record.status == "failed"
+    assert record.finished_at is not None
+    assert record.output == {"error": "graph_execution_failed", "detail": "graph stopped"}
