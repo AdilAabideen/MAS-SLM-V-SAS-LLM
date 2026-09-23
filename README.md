@@ -1,182 +1,45 @@
-# Emergency Severity Index Agentic Triage System
+# Single-agent versus multi-agent research toolkit
 
-This project is a FastAPI backend for running and evaluating Emergency Severity Index triage agents.
+This Python project runs paired experiments comparing a single-agent system (SAS) with a multi-agent system (MAS) on the same cases. Researchers register models, agent definitions, tools, workflows, dataset loaders, and graders in Python, then select those components in strict YAML. The toolkit records the effective configuration, model and tool calls, handoffs, gates, grades, timings, and portable per-case artifacts. Its main research path runs from a clone without a database or API server.
 
-It supports two execution modes:
+The preserved Emergency Severity Index (ESI) comparison is one benchmark, not a requirement of the core. A non-medical [arithmetic benchmark](examples/arithmetic/README.md) and a [copyable external word-count extension](examples/external_extension/README.md) demonstrate the same interfaces. Offline fixtures use fabricated responses; their passing grades only show that the software route works. The ESI benchmark is not clinically validated.
 
-- a single-agent baseline
-- a configuration-driven multi-agent system (MAS) built as a constrained LangGraph workflow
+## Clone-first quickstart
 
-The backend exposes APIs for:
+Use Python 3.11 or newer. From a clone of this repository:
 
-- starting single-agent runs
-- starting MAS runs
-- running single-agent test batches
-- running MAS test batches
-- streaming execution and test events over Server-Sent Events
-- reading run outputs, metrics, and traces
-
-## What the project does
-
-The system takes a structured triage case as input and produces an ESI prediction.
-
-The single-agent path runs one `AgentKernel` instance end-to-end.
-
-The MAS path orchestrates multiple configured specialist agents as graph nodes. In the current workflow, those agents collaborate through structured handoffs and graph state rather than through an unrestricted shared conversation.
-
-The backend persists runs, events, metrics, handoffs, and test results in SQLite by default.
-
-## Seeded test data
-
-On startup, the application seeds a small synthetic test set into the database.
-
-- `10` fake single-agent test cases are seeded
-- `10` fake MAS test cases are seeded
-- the cases are synthetic and deidentified
-
-These are loaded automatically during app startup from the seed files in `app/`.
-
-## Requirements
-
-- Python 3.9+
-- pip
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-research.txt
+PYTHONPATH=src python -m mas_slm_research.cli validate examples/esi/experiment.yaml --fixture examples/esi/offline_fixture.json
+PYTHONPATH=src python -m mas_slm_research.cli inspect examples/esi/experiment.yaml --fixture examples/esi/offline_fixture.json
+PYTHONPATH=src python -m mas_slm_research.cli compare examples/esi/experiment.yaml --fixture examples/esi/offline_fixture.json --no-artifacts --console events
 ```
 
-## Environment configuration
+The fixture supplies all model responses and dummy environment values; these commands make no provider requests. `validate` rejects incomplete configuration or data before inference. `inspect` shows the SAS/MAS models and agents, ordered tools, workflow routes, payload schemas, gates, and effective model choices. `compare` runs both systems on the same three synthetic ESI cases, writes the ordered human trace to stderr, and emits machine-readable JSON to stdout. To save a run, omit `--no-artifacts` and choose a new `--output-dir results/my-run`; `summarize results/my-run` reconstructs its totals without inference. See [CLI.md](CLI.md) and [ARTIFACTS.md](ARTIFACTS.md).
 
-Create a `.env` file in the project root.
+An editable package install is optional:
 
-### OpenAI / GPT
-
-If you want to run the OpenAI-backed models, set:
-
-```env
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_MODEL=gpt-4o-mini
+```sh
+python -m pip install -e .
+mas-slm --help
 ```
 
-If you use Azure OpenAI instead of the standard OpenAI API, set:
+The package also builds as a wheel and includes a copyable ESI benchmark fixture. The project has not been published to a package index. [ESI_BENCHMARK.md](ESI_BENCHMARK.md) explains what is preserved and how to materialize bundled assets.
 
-```env
-AZURE_OPENAI_API_KEY=your_azure_openai_key
-AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com/
-AZURE_OPENAI_API_VERSION=your_api_version
-AZURE_OPENAI_DEPLOYMENT_NAME=your_deployment_name
-```
+## Configure a study
 
-### MedGemma via self-hosted vLLM
+The top-level YAML identifies the SAS agent/model, MAS role-to-agent mapping and default/overridden models, split workflow file, dataset loader, grader, schedule, repetitions, console mode, artifact location, and optional tracing. The workflow YAML explicitly declares start/final agents, allowed handoffs, source groups, gates, payload builders, and handoff schemas. YAML names registered IDs; it never executes Python. `inspect` is the way to verify the effective assignments and communication path before spending inference resources. [CONFIGURATION.md](CONFIGURATION.md) describes validation and model precedence.
 
-The codebase currently uses legacy setting names for the vLLM endpoint. Even though the runtime wrapper is now named `vllm_chat`, the `.env` keys are still:
+Implement your components in a Python module exposing `register_components(registry)`, then name that module under `extensions` in the experiment YAML. `AgentDefinition.build_kernel` is subclassable; `BaseGrader` has `validate_expected`, `evaluate`, and `aggregate`. A dataset row has a stable `case_id`, `input` visible to agents, and a separate `expected` label visible only to the grader. The [external extension](examples/external_extension/README.md) shows a registered workflow, typed handoff, payload builder, grader subclass, per-agent model override, and a copied-directory run with no core edits. See [COMPONENTS.md](COMPONENTS.md), [DATASETS.md](DATASETS.md), and [GRADING.md](GRADING.md).
 
-```env
-LLAMA_SERVER_BASE_URL=http://your-vllm-host:8000/v1
-LLAMA_SERVER_API_KEY=your_optional_api_key
-LLAMA_SERVER_SERIAL_REQUESTS=false
-LLAMA_SERVER_TIMEOUT_S=60
-```
+## Live models and research output
 
-Use these when your MedGemma models are served behind a vLLM-compatible OpenAI-style endpoint.
+Without `--fixture`, registered provider factories construct the actual models. Set the environment variables named in your YAML before `validate`, `inspect`, or `compare`. In the ESI example, `BASELINE_MODEL_ID`, `BASELINE_API_KEY`, `BASELINE_AZURE_ENDPOINT`, and `BASELINE_AZURE_API_VERSION` configure the baseline Azure/OpenAI adapter; `SPECIALIST_MODEL_ID`, `SPECIALIST_API_KEY`, and `SPECIALIST_BASE_URL` configure the vLLM specialist endpoint. A different provider is a registered Python factory selected by ID, not a hardcoded server setting. Never put credentials directly in YAML or shared artifacts. Provider requests may incur cost and transfer case content to the configured service.
 
-### Dr7 / Doctor Seven
+The console renderer has `none`, `summary`, `events`, and `full` modes and `auto`, `always`, or `never` color. It shows model/tool events, agent handoffs, gate readiness, final grades, and errors. [CONSOLE_TRACES.md](CONSOLE_TRACES.md) explains the trace. Artifacts save a versioned manifest, resolved non-secret configuration, per-attempt JSONL, a paired summary and CSV, and optional payload-free event metadata. The summary distinguishes graded attempts from failures; wall time is separate from summed child durations. [COMPARISON.md](COMPARISON.md) explains the measurements.
 
-If you want to use Doctor Seven / Dr7-hosted MedGemma, set:
+Tracing is off by default. `--trace` enables the configured in-memory span tree or optional OTLP HTTP export; `--no-trace` disables it. For OTLP, install the optional `otel` extra and name endpoint/header environment variables in YAML. [TRACING.md](TRACING.md) gives the exporter configuration and limits.
 
-```env
-DR7_API_KEY=your_dr7_api_key
-DR7_MEDICAL_BASE_URL=https://dr7.ai/api/v1/medical
-```
-
-## How to run the project
-
-Start the API server with either of the following:
-
-```bash
-python run.py
-```
-
-or:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-The server starts on:
-
-```text
-http://localhost:8000
-```
-
-FastAPI interactive API docs are available at:
-
-```text
-http://localhost:8000/docs
-```
-
-## What happens on startup
-
-When the app starts, it:
-
-- creates the database tables if they do not exist
-- applies runtime schema upgrades
-- seeds the deidentified single-agent and MAS test cases
-
-By default the database is:
-
-```text
-app.db
-```
-
-## Model selection
-
-The model registry is defined in:
-
-- [app/agentic/model_registry.py](/Users/adil/Documents/University/MultiAgentResearch/UseCase1ESI/app/agentic/model_registry.py:1)
-
-This is where the backend maps model IDs to providers such as:
-
-- OpenAI
-- Dr7
-- vLLM-hosted MedGemma
-
-## If you want to host your own model
-
-If you want to point the project at your own hosted model endpoint, the main files to check are:
-
-- [app/config.py](/Users/adil/Documents/University/MultiAgentResearch/UseCase1ESI/app/config.py:1)
-  This is where the environment variables for the endpoint URL, API key, and timeout are defined.
-- [app/agentic/model_registry.py](/Users/adil/Documents/University/MultiAgentResearch/UseCase1ESI/app/agentic/model_registry.py:1)
-  This is where model IDs are registered and routed to the correct provider wrapper.
-
-If your hosted endpoint is OpenAI-compatible, updating the base URL and model mapping is usually enough.
-
-If your hosted endpoint uses a different request or response format, you would also need to update the relevant wrapper in:
-
-- [app/agentic/models/vllm_chat.py](/Users/adil/Documents/University/MultiAgentResearch/UseCase1ESI/app/agentic/models/vllm_chat.py:1)
-- [app/agentic/models/medgemma_medical_chat.py](/Users/adil/Documents/University/MultiAgentResearch/UseCase1ESI/app/agentic/models/medgemma_medical_chat.py:1)
-
-## Test execution APIs
-
-The main test endpoints are:
-
-- `POST /api/tests/runs/start` for single-agent batch tests
-- `GET /api/tests/runs/{run_id}/stream` for single-agent test streaming
-- `POST /api/mas-tests/runs/start` for MAS batch tests
-- `GET /api/mas-tests/runs/{run_id}/stream` for MAS test streaming
-
-The operational run endpoints are mounted under:
-
-- `/api/agent-runs`
-- `/api/mas-runs`
-
-There is also a compatibility alias for:
-
-- `/api/swarm-runs`
-
-# Research CLI
-
-The database-free research toolkit can be exercised from a clone with `PYTHONPATH=src python -m mas_slm_research.cli`. See [CLI.md](CLI.md) for validation, inspection, single-case runs, paired comparison, and the scripted offline ESI fixture. The legacy API remains in this repository until the backend-retirement milestone.
+The original FastAPI/SQLite application remains in the repository during migration and is scheduled for removal in the backend-retirement milestone. The research CLI does not start it. Historical ESI prompts, tool ordering, routes, and scoring have preservation tests; corrected policies must use new versioned registrations so old and new experiment results remain distinguishable.

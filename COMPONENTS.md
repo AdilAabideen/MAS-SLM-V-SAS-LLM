@@ -23,9 +23,8 @@ callable or subclass `AgentDefinition` and implement `build_kernel`. Tools are c
 or expose `invoke`. Schemas are Pydantic `BaseModel` subclasses. Workflows are
 `WorkflowDefinition` instances or factories. Models are `ModelSpec` instances
 or factories. A grader is a class/factory or an instance exposing
-`validate_expected`, `evaluate`, and `aggregate`. The remaining runner-specific
-arguments and return contracts will be stabilized with the experiment tickets; registration
-itself never invokes a model or loads data.
+`validate_expected`, `evaluate`, and `aggregate`. Registration itself never invokes a model or loads data. The current runner
+contracts are demonstrated by the copyable [external extension](examples/external_extension/README.md).
 
 Call `register_builtin_components(registry)` to install the preserved ESI
 workflow, its role payload builders, and the existing model catalog. The
@@ -50,5 +49,5 @@ An `AgentDefinition.build_kernel` method receives the selected `model`,
 each case attempt. A provider factory receives a `ResolvedModel` and an
 environment mapping; it returns a LangChain-compatible chat model. A role
 payload builder receives the scoped MAS state and returns a dictionary with
-an `llm_payload` dictionary. The configured constructor validates ESI role
-names, route schemas, and final-output schemas before a case can run.
+an `llm_payload` dictionary. The configured constructor validates declared role names, route schemas, and
+final-output schemas before a case can run.

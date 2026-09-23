@@ -23,3 +23,5 @@ Without `--fixture`, model construction uses the explicitly registered providers
 Human progress from `run` and `compare` is written to stderr while result JSON stays on stdout. Choose `--console none|summary|events|full` and `--color auto|always|never`, or use the experiment's reporting settings. [CONSOLE_TRACES.md](CONSOLE_TRACES.md) describes event order, redaction, and renderer failure behavior.
 
 Tracing is disabled by default. `--trace` records the configured in-memory or OTLP spans, while `--no-trace` turns it off for that command. See [TRACING.md](TRACING.md) for the optional exporter and environment references.
+
+For an unrelated task, run the [arithmetic example](examples/arithmetic/README.md) with `PYTHONPATH=src:examples/arithmetic`. The [external extension](examples/external_extension/README.md) shows a copied researcher module and a per-role model override.
