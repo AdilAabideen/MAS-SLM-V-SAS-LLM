@@ -197,7 +197,12 @@ def test_it_run_007_no_tool_calls_in_strict_mode_yields_invalid_output_fallback(
         runtime_config=RuntimeConfig(require_final_answer_tool=True, allow_plain_json_final_output=False),
     )
     output = asyncio.run(agent.ainvoke("hello"))
-    assert output["error"] == "final_output_invalid"
+    assert output == {
+        "ok": False,
+        "error": "final_output_invalid",
+        "reason": "final_answer_tool_required",
+        "raw_output": '{"recommendation":{"value":"plain"}}',
+    }
 
 
 @pytest.mark.integration
@@ -278,3 +283,46 @@ def test_it_run_011_provider_exception_is_recorded_and_propagated():
     assert len(metrics.items) == 1
     assert metrics.items[0]["error_text"] == "provider unavailable"
     assert metrics.items[0]["run_id"] == "scripted_case"
+
+
+@pytest.mark.integration
+@pytest.mark.runtime
+@pytest.mark.parametrize(
+    "response, expected_source, expected_native, expected_recovered",
+    [
+        (
+            AIMessage(content="", tool_calls=[{"id": "native_1", "name": "lookup_value", "args": {"value": "abc"}}]),
+            "native_tool_calls",
+            1,
+            0,
+        ),
+        (
+            AIMessage(content='{"tool_calls":[{"id":"text_1","name":"lookup_value","arguments":{"value":"abc"}}]}'),
+            "text_json",
+            0,
+            1,
+        ),
+    ],
+)
+def test_it_run_012_tool_call_provenance_and_arguments_are_preserved(
+    response, expected_source, expected_native, expected_recovered
+):
+    """The same call retains its origin and exact arguments in telemetry."""
+    metrics = Collector()
+    model = FakeChatModel(
+        [
+            response,
+            AIMessage(content="", tool_calls=[{"id": "final_1", "name": "final_answer", "args": {"recommendation": {"value": "abc"}}}]),
+        ]
+    )
+    agent = AgentKernel(model=model, tools=[lookup_value, final_answer], response_format=OutputSchema, llm_call_handlers=[metrics])
+    agent.set_event_context(run_id="provenance_case", agent_name="baseline")
+
+    assert asyncio.run(agent.ainvoke("case")) == {"recommendation": {"value": "abc"}, "ok": True}
+    first = metrics.items[0]
+    assert first["tool_call_parse_source"] == expected_source
+    assert first["native_tool_call_count"] == expected_native
+    assert first["text_recovered_tool_call_count"] == expected_recovered
+    assert first["tool_names"] == ["lookup_value"]
+    tool_message = next(message for message in model.messages_seen[1] if isinstance(message, ToolMessage))
+    assert "abc" in tool_message.content
