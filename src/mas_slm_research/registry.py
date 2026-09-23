@@ -121,6 +121,8 @@ def register_builtin_components(registry: ComponentRegistry) -> None:
     from .model_factory import builtin_provider_factory
     from .model_registry import list_registered_models
     from .agents.esi.definitions import ESI_AGENTS, ESI_SCHEMAS, ESI_TOOLS
+    from .evaluation.esi_final_acuity import ESIFinalAcuityGrader
+    from .dataset import load_esi_jsonl, load_jsonl
     from .workflows.esi.definition import ESI_MAS
     from .workflows.esi.payload_builder import build_pending_agent_payload, payload_builders
 
@@ -138,3 +140,6 @@ def register_builtin_components(registry: ComponentRegistry) -> None:
         registry.register("schemas", identifier, schema)
     for identifier, tool in ESI_TOOLS.items():
         registry.register("tools", identifier, tool)
+    registry.register("graders", "esi.final_acuity_v1", ESIFinalAcuityGrader)
+    registry.register("dataset_loaders", "jsonl", load_jsonl)
+    registry.register("dataset_loaders", "esi.jsonl_v1", load_esi_jsonl)

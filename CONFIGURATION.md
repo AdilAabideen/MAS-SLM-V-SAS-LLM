@@ -13,10 +13,10 @@ call. Start with `ComponentRegistry()` and `register_builtin_components(...)`,
 then explicitly register your own implementations or list extension modules
 under `extensions`. An extension module must export
 `register_components(registry)`; there is no automatic discovery or executable
-YAML expression. The ESI agents, tools, schemas, workflow, and payload builders
-are registered now. Dataset and grader registrations are completed by the
-experiment tickets, so the included ESI files are a validated system contract
-but not yet a runnable dataset benchmark by themselves.
+YAML expression. The ESI agents, tools, schemas, workflow, payload builders,
+final-acuity grader, and synthetic-case dataset loader are registered now.
+The experiment scheduler and comparison command are added by later tickets;
+the included ESI files are a validated system and dataset contract at this stage.
 
 Each model entry chooses one of `model_env`, `model_id`, or `catalog`. A
 `model_env` points to an environment variable containing the provider model ID.
@@ -38,8 +38,8 @@ Per-role `payloads.<role>.input_schema` identifies the legacy case-input
 contract for inspection; it is resolved at load time. The preserved ESI graph
 does not enforce those strict models on each projected payload because its
 case text can have missing observations. Generated handoff tools do enforce
-the route-specific `handoff_schemas`. Dataset validation and case projection
-are introduced by the experiment tickets.
+the route-specific `handoff_schemas`. The `esi.jsonl_v1` loader validates and
+normalizes selected case facts before inference; see [`DATASETS.md`](DATASETS.md).
 
 The `sas.model` selection is explicit. If its agent also declares `model`, the
 two must agree. For MAS, each role names an agent under `mas.agents`;

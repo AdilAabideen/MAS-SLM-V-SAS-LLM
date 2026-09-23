@@ -13,8 +13,10 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from mas_slm_research.configuration import load_configuration
+from mas_slm_research.comparison import compare_experiment, configured_prices
 from mas_slm_research.configured_systems import build_configured_systems
 from mas_slm_research.contracts import RunIdentity, RunStatus
+from mas_slm_research.experiment import ExperimentStatus, run_configured_experiment
 from mas_slm_research.multi_agent import MultiAgentRunner
 from mas_slm_research.registry import ComponentRegistry, register_builtin_components
 from mas_slm_research.telemetry import token_estimator
@@ -44,8 +46,6 @@ CASE = {
 def _registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     register_builtin_components(registry)
-    registry.register("dataset_loaders", "jsonl", lambda path: [])
-    registry.register("graders", "esi.final_acuity_v1", lambda: object())
     return registry
 
 
@@ -313,8 +313,6 @@ from mas_slm_research.configuration import load_configuration
 from mas_slm_research.configured_systems import build_configured_systems
 from tests.doubles.fake_provider import FakeChatModel
 r = ComponentRegistry(); register_builtin_components(r)
-r.register("dataset_loaders", "jsonl", lambda path: [])
-r.register("graders", "esi.final_acuity_v1", lambda: None)
 loaded = load_configuration(sys.argv[1], registry=r, environment={
     "BASELINE_MODEL_ID": "gpt-4o", "BASELINE_API_KEY": "x",
     "BASELINE_AZURE_ENDPOINT": "https://azure.invalid", "BASELINE_AZURE_API_VERSION": "2024-02-01",
@@ -333,3 +331,32 @@ assert "sqlalchemy" not in sys.modules
         capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.integration
+def test_registered_esi_dataset_runs_both_arms_in_system_major_order() -> None:
+    loaded = load_configuration(EXAMPLE, registry=_registry(), environment=ENV)
+    responses = _responses(("esi1_agent",))
+
+    def fake_factory(model, role):
+        response = (_tool_call("final_answer", _baseline_output()) if role == "baseline"
+                    else responses.get(role, AIMessage(content="")))
+        return FakeChatModel([response])
+
+    run = asyncio.run(run_configured_experiment(
+        loaded, model_factory=fake_factory, experiment_id="offline-esi",
+    ))
+    assert run.status == ExperimentStatus.COMPLETED
+    assert len(run.attempts) == 6
+    assert [attempt.system_id for attempt in run.attempts] == ["single"] * 3 + ["multi"] * 3
+    assert all(pair.single and pair.multi for pair in run.pairs)
+    assert all(attempt.result.status == RunStatus.COMPLETED for attempt in run.attempts)
+    assert all(attempt.grade.status.value == "graded" for attempt in run.attempts)
+    grader = loaded.registry.resolve("graders", loaded.experiment.grader)
+    report = compare_experiment(run, grader=grader, prices_by_role=configured_prices(loaded))
+    assert report.systems["single"].attempted == 3
+    assert report.systems["multi"].attempted == 3
+    assert report.systems["single"].grader_summary["attempted"] == 3
+    assert report.systems["multi"].grader_summary["attempted"] == 3
+    assert report.systems["single"].cost_usd_estimate is None
+    assert len(report.pairs) == 3
