@@ -15,6 +15,7 @@ from langchain_core.messages import AIMessage
 from mas_slm_research.configuration import load_configuration
 from mas_slm_research.configured_systems import build_configured_systems
 from mas_slm_research.contracts import RunIdentity, RunStatus
+from mas_slm_research.experiment import ExperimentStatus, run_configured_experiment
 from mas_slm_research.multi_agent import MultiAgentRunner
 from mas_slm_research.registry import ComponentRegistry, register_builtin_components
 from mas_slm_research.telemetry import token_estimator
@@ -329,3 +330,24 @@ assert "sqlalchemy" not in sys.modules
         capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.integration
+def test_registered_esi_dataset_runs_both_arms_in_system_major_order() -> None:
+    loaded = load_configuration(EXAMPLE, registry=_registry(), environment=ENV)
+    responses = _responses(("esi1_agent",))
+
+    def fake_factory(model, role):
+        response = (_tool_call("final_answer", _baseline_output()) if role == "baseline"
+                    else responses.get(role, AIMessage(content="")))
+        return FakeChatModel([response])
+
+    run = asyncio.run(run_configured_experiment(
+        loaded, model_factory=fake_factory, experiment_id="offline-esi",
+    ))
+    assert run.status == ExperimentStatus.COMPLETED
+    assert len(run.attempts) == 6
+    assert [attempt.system_id for attempt in run.attempts] == ["single"] * 3 + ["multi"] * 3
+    assert all(pair.single and pair.multi for pair in run.pairs)
+    assert all(attempt.result.status == RunStatus.COMPLETED for attempt in run.attempts)
+    assert all(attempt.grade.status.value == "graded" for attempt in run.attempts)
