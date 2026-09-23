@@ -85,9 +85,22 @@ class DatasetConfig(_StrictSpec):
 
 
 class ReportingConfig(_StrictSpec):
-    console: Literal["full", "summary", "none"] = "full"
+    console: Literal["full", "events", "summary", "none"] = "full"
     color: Literal["auto", "always", "never"] = "auto"
     output_directory: str | None = None
+
+
+class TelemetryConfig(_StrictSpec):
+    enabled: bool = False
+    exporter: Literal["memory", "otlp_http"] = "memory"
+    endpoint_env: str | None = None
+    header_env: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def require_endpoint_for_export(self) -> "TelemetryConfig":
+        if self.enabled and self.exporter == "otlp_http" and not self.endpoint_env:
+            raise ValueError("telemetry.endpoint_env is required for otlp_http export")
+        return self
 
 
 class ExperimentSpec(_StrictSpec):
@@ -103,6 +116,7 @@ class ExperimentSpec(_StrictSpec):
     repetitions: int = Field(default=1, ge=1)
     schedule: Literal["system_major", "case_major"] = "system_major"
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
 
 
 class WorkflowMetadataSpec(_StrictSpec):
@@ -425,6 +439,13 @@ def load_configuration(
     _require_registered(registry, "graders", experiment.grader, path, "grader")
 
     env = environment if environment is not None else os.environ
+    if experiment.telemetry.enabled:
+        if experiment.telemetry.endpoint_env:
+            _env_value(experiment.telemetry.endpoint_env, env, path, "telemetry.endpoint_env")
+        for header, env_name in experiment.telemetry.header_env.items():
+            if not header.strip():
+                raise ConfigurationError(f"{path}: telemetry.header_env: header name must be nonempty")
+            _env_value(env_name, env, path, f"telemetry.header_env.{header}")
     resolved: dict[str, ResolvedModel] = {}
     for name, model in experiment.models.items():
         _require_registered(registry, "providers", model.provider, path, f"models.{name}.provider")

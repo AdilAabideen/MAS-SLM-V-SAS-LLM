@@ -189,6 +189,7 @@ def _validate_records(run: ExperimentRun) -> None:
 def compare_experiment(
     run: ExperimentRun, *, grader: GraderLike | None = None,
     prices_by_role: Mapping[str, PriceRate] | None = None,
+    recorded_grader_summaries: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> ComparisonReport:
     """Compute all denominators from case attempts; never drop a failed pair."""
     _validate_records(run)
@@ -231,7 +232,9 @@ def compare_experiment(
             usage_sources=usage_sources,
             cost_usd_estimate=_sum_known_cost([item.cost_usd_estimate for item in metrics]),
             workflow_wall_seconds=sum(item.workflow_wall_seconds for item in metrics),
-            grader_summary=aggregate_grades(grader, [attempt.grade for attempt in attempts]) if grader else None,
+            grader_summary=(aggregate_grades(grader, [attempt.grade for attempt in attempts]) if grader
+                            else dict(recorded_grader_summaries[arm])
+                            if recorded_grader_summaries and arm in recorded_grader_summaries else None),
         )
     pairs: list[PairedOutcome] = []
     for pair in run.pairs:

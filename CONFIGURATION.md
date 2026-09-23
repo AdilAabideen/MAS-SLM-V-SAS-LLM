@@ -15,8 +15,8 @@ under `extensions`. An extension module must export
 `register_components(registry)`; there is no automatic discovery or executable
 YAML expression. The ESI agents, tools, schemas, workflow, payload builders,
 final-acuity grader, and synthetic-case dataset loader are registered now.
-The experiment scheduler and comparison command are added by later tickets;
-the included ESI files are a validated system and dataset contract at this stage.
+The experiment scheduler and comparison CLI use these registered contracts;
+the included ESI files are a fabricated offline software example.
 
 Each model entry chooses one of `model_env`, `model_id`, or `catalog`. A
 `model_env` points to an environment variable containing the provider model ID.
