@@ -1,0 +1,54 @@
+version: 1
+metadata:
+  workflow_id: arithmetic_parallel_v1
+  name: Parallel arithmetic check
+  version: 1.0.0
+  description: Two independent workers hand off sums before final review.
+participating_agents: [adder_agent, checker_agent, final_agent]
+sources:
+  adder:
+    source_id: adder
+    name: Primary addition
+    agent_names: [adder_agent]
+  checker:
+    source_id: checker
+    name: Independent check
+    agent_names: [checker_agent]
+start_agents: [adder_agent, checker_agent]
+finalizing_agents: [final_agent]
+allowed_handoffs:
+  adder_agent: [final_agent]
+  checker_agent: [final_agent]
+  final_agent: []
+gates:
+  final_gate:
+    gate_id: final_gate
+    name: Both checks received
+    required_sources: [adder, checker]
+    incoming_from: []
+    target_node: final_agent
+    metadata:
+      gate_type: readiness_gate
+      ready_rule: requires_required_sources_to_handoff_to_target
+agent_metadata:
+  adder_agent: {role: worker}
+  checker_agent: {role: verifier}
+  final_agent: {role: finalizer}
+workflow_metadata:
+  execution_model: parallel_check
+  final_gate_id: final_gate
+payloads:
+  adder_agent:
+    builder: arithmetic.worker_v1
+    input_schema: arithmetic.sum_input_v1
+  checker_agent:
+    builder: arithmetic.worker_v1
+    input_schema: arithmetic.sum_input_v1
+  final_agent:
+    builder: arithmetic.final_v1
+    input_schema: arithmetic.sum_input_v1
+handoff_schemas:
+  adder_agent:
+    final_agent: arithmetic.sum_handoff_v1
+  checker_agent:
+    final_agent: arithmetic.sum_handoff_v1

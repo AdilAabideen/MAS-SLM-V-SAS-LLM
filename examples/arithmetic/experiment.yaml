@@ -1,0 +1,47 @@
+version: 1
+name: arithmetic-offline-comparison
+extensions: [arithmetic_components]
+models:
+  baseline:
+    provider: openai
+    model_id: offline-arithmetic-baseline
+  specialist:
+    provider: vllm
+    model_id: offline-arithmetic-specialist
+agents:
+  baseline:
+    definition: arithmetic.single_v1
+    model: baseline
+  adder:
+    definition: arithmetic.adder_agent_v1
+    model: specialist
+  checker:
+    definition: arithmetic.checker_agent_v1
+    model: specialist
+  final:
+    definition: arithmetic.final_v1
+    model: specialist
+sas:
+  agent: baseline
+  model: baseline
+mas:
+  default_model: specialist
+  agents:
+    adder_agent: adder
+    checker_agent: checker
+    final_agent: final
+  model_overrides: {}
+  workflow: workflow.yaml
+dataset:
+  loader: jsonl
+  path: cases.jsonl
+grader: arithmetic.exact_sum_v1
+repetitions: 1
+schedule: system_major
+reporting:
+  console: events
+  color: auto
+  output_directory: ../../results/arithmetic-offline
+telemetry:
+  enabled: false
+  exporter: memory
