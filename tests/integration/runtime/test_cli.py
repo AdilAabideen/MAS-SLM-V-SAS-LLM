@@ -98,3 +98,15 @@ def test_console_trace_is_ordered_on_stderr_and_can_be_disabled() -> None:
     assert full.returncode == 0
     assert '"is_esi1": true' in full.stderr
     assert '"result"' in full.stderr
+
+
+def test_cli_trace_on_off_preserves_case_result() -> None:
+    options = (str(CONFIG), "--fixture", str(FIXTURE), "--system", "multi",
+               "--case", "synthetic-esi1-001", "--console", "none")
+    off = _cli("run", *options, "--no-trace")
+    on = _cli("run", *options, "--trace")
+    assert off.returncode == on.returncode == 0
+    assert json.loads(off.stdout)["result"]["output"] == json.loads(on.stdout)["result"]["output"]
+    assert json.loads(off.stdout)["grade"]["score"] == json.loads(on.stdout)["grade"]["score"]
+    assert off.stderr == ""
+    assert "spans captured" in on.stderr

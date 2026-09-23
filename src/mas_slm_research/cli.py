@@ -23,6 +23,7 @@ from .experiment import run_configured_experiment
 from .grading import grade_case, require_grader
 from .preview import inspect_configuration
 from .registry import ComponentRegistry, register_builtin_components
+from .tracing import trace_case_execution, trace_experiment
 
 
 EXIT_OK = 0
@@ -100,6 +101,9 @@ def _parser() -> argparse.ArgumentParser:
                                  help="Human progress on stderr; overrides reporting.console")
             command.add_argument("--color", choices=("auto", "always", "never"),
                                  help="ANSI color policy; NO_COLOR always wins")
+            trace = command.add_mutually_exclusive_group()
+            trace.add_argument("--trace", action="store_true", help="Enable configured span recording/export")
+            trace.add_argument("--no-trace", action="store_true", help="Disable configured span recording/export")
     summary = commands.add_parser("summarize")
     summary.add_argument("report", type=Path, help="JSON report captured from compare stdout")
     return parser
@@ -133,6 +137,9 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
             mode=args.console or loaded.experiment.reporting.console,
             color=args.color or loaded.experiment.reporting.color,
         )
+        trace_config = loaded.experiment.telemetry.model_copy(update={
+            "enabled": True if args.trace else False if args.no_trace else loaded.experiment.telemetry.enabled,
+        })
     if args.command == "validate":
         dataset = load_configured_dataset(loaded)
         return {"valid": True, "experiment": loaded.experiment.name,
@@ -158,6 +165,14 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
                                  repetition=1, execution=execution, grade=grade)
         except Exception as exc:
             print(f"reporting warning: {type(exc).__name__}: {exc}", file=sys.stderr)
+        trace = trace_case_execution(
+            execution, grade=grade, config=trace_config,
+            environment=fixture_env or os.environ,
+        )
+        if trace.enabled:
+            print(f"tracing: {len(trace.spans)} spans captured", file=sys.stderr)
+        for warning in trace.warnings:
+            print(f"tracing warning: {warning}", file=sys.stderr)
         return {"result": execution.result.to_dict(), "grade": grade.to_dict()}
     if args.command == "compare":
         assert renderer is not None
@@ -166,6 +181,11 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         )
         for warning in run.reporting_errors:
             print(f"reporting warning: {warning}", file=sys.stderr)
+        trace = trace_experiment(run, config=trace_config, environment=fixture_env or os.environ)
+        if trace.enabled:
+            print(f"tracing: {len(trace.spans)} spans captured", file=sys.stderr)
+        for warning in trace.warnings:
+            print(f"tracing warning: {warning}", file=sys.stderr)
         grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
         return compare_experiment(
             run, grader=grader, prices_by_role=configured_prices(loaded),

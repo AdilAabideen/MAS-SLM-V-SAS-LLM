@@ -61,3 +61,7 @@ reporting:
   console: full
   color: auto
   output_directory: ../../results/esi-comparison
+
+telemetry:
+  enabled: false
+  exporter: memory

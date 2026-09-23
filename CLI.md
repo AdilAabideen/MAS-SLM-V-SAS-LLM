@@ -19,3 +19,5 @@ Exit code `0` means the command itself completed; an incorrect prediction or a r
 Without `--fixture`, model construction uses the explicitly registered providers and the environment variables named in the experiment YAML. The fixture path is deliberately opt-in and never sends model requests. The CLI uses the existing character-based token estimate for fixture runs when the tokenizer cache is unavailable; the general offline tokenizer repair remains KI-06/RF-35.
 
 Human progress from `run` and `compare` is written to stderr while result JSON stays on stdout. Choose `--console none|summary|events|full` and `--color auto|always|never`, or use the experiment's reporting settings. [CONSOLE_TRACES.md](CONSOLE_TRACES.md) describes event order, redaction, and renderer failure behavior.
+
+Tracing is disabled by default. `--trace` records the configured in-memory or OTLP spans, while `--no-trace` turns it off for that command. See [TRACING.md](TRACING.md) for the optional exporter and environment references.
