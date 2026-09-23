@@ -13,9 +13,9 @@ call. Start with `ComponentRegistry()` and `register_builtin_components(...)`,
 then explicitly register your own implementations or list extension modules
 under `extensions`. An extension module must export
 `register_components(registry)`; there is no automatic discovery or executable
-YAML expression. The ESI agents, tools, schemas, workflow, and payload builders
-are registered now. Dataset and grader registrations are completed by the
-experiment tickets, so the included ESI files are a validated system contract
+YAML expression. The ESI agents, tools, schemas, workflow, payload builders,
+and final-acuity grader are registered now. Dataset registration is completed
+by the experiment tickets, so the included ESI files are a validated system contract
 but not yet a runnable dataset benchmark by themselves.
 
 Each model entry chooses one of `model_env`, `model_id`, or `catalog`. A

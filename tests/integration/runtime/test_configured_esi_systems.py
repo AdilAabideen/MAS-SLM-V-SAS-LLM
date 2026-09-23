@@ -45,7 +45,6 @@ def _registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     register_builtin_components(registry)
     registry.register("dataset_loaders", "jsonl", lambda path: [])
-    registry.register("graders", "esi.final_acuity_v1", lambda: object())
     return registry
 
 
@@ -314,7 +313,6 @@ from mas_slm_research.configured_systems import build_configured_systems
 from tests.doubles.fake_provider import FakeChatModel
 r = ComponentRegistry(); register_builtin_components(r)
 r.register("dataset_loaders", "jsonl", lambda path: [])
-r.register("graders", "esi.final_acuity_v1", lambda: None)
 loaded = load_configuration(sys.argv[1], registry=r, environment={
     "BASELINE_MODEL_ID": "gpt-4o", "BASELINE_API_KEY": "x",
     "BASELINE_AZURE_ENDPOINT": "https://azure.invalid", "BASELINE_AZURE_API_VERSION": "2024-02-01",

@@ -22,9 +22,9 @@ payload builders, and dataset loaders are callable. Agent definitions may be
 callable or subclass `AgentDefinition` and implement `build_kernel`. Tools are callable
 or expose `invoke`. Schemas are Pydantic `BaseModel` subclasses. Workflows are
 `WorkflowDefinition` instances or factories. Models are `ModelSpec` instances
-or factories. A grader is a class/factory or an instance exposing `evaluate`
-and `aggregate`. The runner-specific arguments and return contracts will be
-stabilized with the experiment-runner tickets; registration
+or factories. A grader is a class/factory or an instance exposing
+`validate_expected`, `evaluate`, and `aggregate`. The remaining runner-specific
+arguments and return contracts will be stabilized with the experiment tickets; registration
 itself never invokes a model or loads data.
 
 Call `register_builtin_components(registry)` to install the preserved ESI
@@ -34,6 +34,11 @@ inventory does not connect to any provider. Built-in ESI agents, tools, and
 schemas are also registered. Use `registry.inventory()` or
 `registry.ids(kind)` to see effective IDs, and `registry.resolve(kind, id)` to
 obtain an implementation.
+
+The grader contract is now `BaseGrader` or a structurally compatible object
+with the same three methods. See [`GRADING.md`](GRADING.md). The built-in
+`esi.final_acuity_v1` grader scores the same final task for both systems;
+legacy specialist and doctor diagnostics do not become headline accuracy.
 
 An `AgentDefinition.build_kernel` method receives the selected `model`,
 `runtime_config`, resolved `workflow` (or `None` for SAS), route-to-schema
