@@ -1,0 +1,52 @@
+{
+  "environment": {
+    "BASELINE_MODEL_ID": "offline-baseline",
+    "BASELINE_API_KEY": "fixture-only",
+    "BASELINE_AZURE_ENDPOINT": "https://azure.invalid",
+    "BASELINE_AZURE_API_VERSION": "2024-02-01",
+    "SPECIALIST_MODEL_ID": "offline-specialist",
+    "SPECIALIST_API_KEY": "fixture-only",
+    "SPECIALIST_BASE_URL": "http://localhost:9999/v1"
+  },
+  "roles": {
+    "baseline": [
+      {
+        "tool_calls": [{
+          "id": "baseline-final", "name": "final_answer",
+          "args": {
+            "final_esi_level": 3, "confidence": 0.8,
+            "decision_source": "esi345_resource_prediction", "uptriaged": false,
+            "abnormal_vitals_considered": true, "vitals_summary": "Synthetic normal vitals.",
+            "case_summary": "Offline software fixture.", "rationale": "Scripted response for CLI demonstration."
+          }
+        }]
+      }
+    ],
+    "esi1_agent": [
+      {
+        "tool_calls": [{
+          "id": "esi1-handoff", "name": "final_esi1_true_handoff_to_doctor_agent",
+          "args": {"is_esi1": true, "reason": "Scripted fixture route", "critical_concerns": []}
+        }]
+      }
+    ],
+    "esi2_agent": [{"content": "Scripted fixture: this route is not reached."}],
+    "esi345_agent": [{"content": "Scripted fixture: this route is not reached."}],
+    "vitals_agent": [
+      {
+        "tool_calls": [{
+          "id": "vitals-final", "name": "finalise_output",
+          "args": {"consider_uptriage": false, "reason": "Synthetic normal vitals", "abnormal_vitals": [], "confidence": 0.8}
+        }]
+      }
+    ],
+    "doctor_agent": [
+      {
+        "tool_calls": [{
+          "id": "doctor-final", "name": "final_answer",
+          "args": {"final_esi_level": 1, "uptriaged": false, "decision_source": "esi1", "audit_summary": "Scripted fixture route."}
+        }]
+      }
+    ]
+  }
+}

@@ -176,3 +176,7 @@ The operational run endpoints are mounted under:
 There is also a compatibility alias for:
 
 - `/api/swarm-runs`
+
+# Research CLI
+
+The database-free research toolkit can be exercised from a clone with `PYTHONPATH=src python -m mas_slm_research.cli`. See [CLI.md](CLI.md) for validation, inspection, single-case runs, paired comparison, and the scripted offline ESI fixture. The legacy API remains in this repository until the backend-retirement milestone.

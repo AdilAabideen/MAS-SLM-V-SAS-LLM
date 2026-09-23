@@ -9,6 +9,9 @@ description = "Configurable single- and multi-agent research experiments"
 requires-python = ">=3.11"
 dependencies = ["PyYAML>=6"]
 
+[project.scripts]
+mas-slm = "mas_slm_research.cli:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
