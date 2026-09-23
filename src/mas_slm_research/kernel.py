@@ -32,6 +32,7 @@ from mas_slm_research.telemetry import (
     ToolExecutionMetric,
 )
 from mas_slm_research.telemetry.usage_extractor import extract_provider_usage
+from mas_slm_research.workflows.definition import WorkflowDefinition
 
 
 class AgentKernel:
@@ -60,6 +61,7 @@ class AgentKernel:
         llm_call_handlers: Sequence[Callable[[dict[str, Any]], None]] | None = None,
         tool_call_handlers: Sequence[Callable[[dict[str, Any]], None]] | None = None,
         handoff_tool_names: Sequence[str] | None = None,
+        handoff_workflow: WorkflowDefinition | None = None,
         max_tool_calls: int = 2,
         runtime_config: RuntimeConfig | None = None,
     ) -> None:
@@ -121,7 +123,7 @@ class AgentKernel:
             validate_output=self._schema_validation_error_for_output,
         )
         self._handoff_tool_names = list(handoff_tool_names or [])
-        self._handoff_policy = HandoffPolicy(handoff_tool_names=handoff_tool_names)
+        self._handoff_policy = HandoffPolicy(handoff_tool_names=handoff_tool_names, workflow=handoff_workflow)
         self._tool_executor = ToolExecutor(
             tools_by_name=self.tools_by_name,
             estimate_tool_result_tokens=self._token_estimator.estimate_tool_result_tokens,
