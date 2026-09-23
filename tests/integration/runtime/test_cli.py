@@ -76,3 +76,25 @@ def test_unknown_case_and_bad_summary_fail_before_inference(tmp_path: Path) -> N
     path = tmp_path / "bad.json"
     path.write_text("{}", encoding="utf-8")
     assert _cli("summarize", str(path)).returncode == 2
+
+
+def test_console_trace_is_ordered_on_stderr_and_can_be_disabled() -> None:
+    options = (str(CONFIG), "--fixture", str(FIXTURE),
+               "--system", "multi", "--case", "synthetic-esi1-001")
+    traced = _cli("run", *options, "--console", "events", "--color", "never")
+    quiet = _cli("run", *options, "--console", "none")
+    assert traced.returncode == quiet.returncode == 0
+    assert json.loads(traced.stdout)["result"]["status"] == json.loads(quiet.stdout)["result"]["status"]
+    assert quiet.stderr == ""
+    assert "[esi1_agent] tool_call" in traced.stderr
+    assert "[vitals_agent] tool_call" in traced.stderr
+    assert "handoff_created -> doctor_agent" in traced.stderr
+    assert "gate_evaluated doctor_gate ready=True" in traced.stderr
+    assert traced.stderr.index("[esi1_agent] agent_started") < traced.stderr.index("[doctor_agent] agent_started")
+    assert "\x1b[" not in traced.stderr
+    assert "fixture-only" not in traced.stderr
+
+    full = _cli("run", *options, "--console", "full", "--color", "never")
+    assert full.returncode == 0
+    assert '"is_esi1": true' in full.stderr
+    assert '"result"' in full.stderr

@@ -62,6 +62,7 @@ class ExperimentRun:
     ended_at: str
     attempts: tuple[ExperimentAttempt, ...]
     pairs: tuple[ExperimentPair, ...]
+    reporting_errors: tuple[str, ...] = ()
 
 
 def _utc_now() -> str:
@@ -118,6 +119,7 @@ async def run_experiment(
     loaded: LoadedConfiguration, *, dataset: LoadedDataset, systems: ConfiguredSystems,
     grader: GraderLike, experiment_id: str | None = None,
     cancel_requested: Callable[[], bool] | None = None,
+    on_attempt: Callable[[ExperimentAttempt], None] | None = None,
 ) -> ExperimentRun:
     """Run all selected cases sequentially, retaining each failed arm and grade."""
     grader = require_grader(grader)
@@ -130,6 +132,7 @@ async def run_experiment(
         raise ValueError("experiment_id must be nonempty")
     started_at = _utc_now()
     attempts: list[ExperimentAttempt] = []
+    reporting_errors: list[str] = []
     status = ExperimentStatus.COMPLETED
     for arm, case, repetition in _schedule(dataset.cases, loaded.experiment.repetitions, loaded.experiment.schedule):
         if cancel_requested is not None and cancel_requested():
@@ -175,6 +178,11 @@ async def run_experiment(
             model_choices=model_choices, runtime_policies=runtime_policies,
             execution=execution, result=result, grade=grade, cancelled=cancelled,
         ))
+        if on_attempt is not None:
+            try:
+                on_attempt(attempts[-1])
+            except Exception as exc:
+                reporting_errors.append(f"attempt {sequence}: {type(exc).__name__}: {exc}")
         if cancelled:
             break
     recorded = tuple(attempts)
@@ -183,12 +191,14 @@ async def run_experiment(
         dataset_path=str(dataset.path), started_at=started_at, ended_at=_utc_now(),
         attempts=recorded,
         pairs=_pairs(dataset.cases, loaded.experiment.repetitions, recorded),
+        reporting_errors=tuple(reporting_errors),
     )
 
 
 async def run_configured_experiment(
     loaded: LoadedConfiguration, *, model_factory: ModelFactory | None = None,
     experiment_id: str | None = None, cancel_requested: Callable[[], bool] | None = None,
+    on_attempt: Callable[[ExperimentAttempt], None] | None = None,
 ) -> ExperimentRun:
     """Perform all dataset preflight checks before building or invoking models."""
     dataset = load_configured_dataset(loaded)
@@ -197,4 +207,5 @@ async def run_configured_experiment(
     return await run_experiment(
         loaded, dataset=dataset, systems=systems, grader=grader,
         experiment_id=experiment_id, cancel_requested=cancel_requested,
+        on_attempt=on_attempt,
     )

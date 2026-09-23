@@ -14,6 +14,7 @@ from typing import Any, Mapping, Sequence
 from langchain_core.messages import AIMessage
 
 from .comparison import compare_experiment, configured_prices
+from .console import ConsoleRenderer
 from .configuration import ConfigurationError, load_configuration
 from .configured_systems import build_configured_systems
 from .contracts import RunIdentity
@@ -94,6 +95,11 @@ def _parser() -> argparse.ArgumentParser:
         if name == "run":
             command.add_argument("--system", choices=("single", "multi"), required=True)
             command.add_argument("--case", required=True, help="Case ID from the configured dataset")
+        if name in {"run", "compare"}:
+            command.add_argument("--console", choices=("none", "summary", "events", "full"),
+                                 help="Human progress on stderr; overrides reporting.console")
+            command.add_argument("--color", choices=("auto", "always", "never"),
+                                 help="ANSI color policy; NO_COLOR always wins")
     summary = commands.add_parser("summarize")
     summary.add_argument("report", type=Path, help="JSON report captured from compare stdout")
     return parser
@@ -121,6 +127,12 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
     registry = ComponentRegistry()
     register_builtin_components(registry)
     loaded = load_configuration(args.config, registry=registry, environment=fixture_env or os.environ)
+    renderer = None
+    if args.command in {"run", "compare"}:
+        renderer = ConsoleRenderer(
+            mode=args.console or loaded.experiment.reporting.console,
+            color=args.color or loaded.experiment.reporting.color,
+        )
     if args.command == "validate":
         dataset = load_configured_dataset(loaded)
         return {"valid": True, "experiment": loaded.experiment.name,
@@ -140,9 +152,20 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         else:
             execution = await systems.mas_runner.run_case(identity=identity, case_info=case.agent_input())
         grade = grade_case(grader, expected=case.expected_label(), result=execution.result)
+        assert renderer is not None
+        try:
+            renderer.render_case(system_id=args.system, case_id=case.case_id,
+                                 repetition=1, execution=execution, grade=grade)
+        except Exception as exc:
+            print(f"reporting warning: {type(exc).__name__}: {exc}", file=sys.stderr)
         return {"result": execution.result.to_dict(), "grade": grade.to_dict()}
     if args.command == "compare":
-        run = await run_configured_experiment(loaded, model_factory=model_factory)
+        assert renderer is not None
+        run = await run_configured_experiment(
+            loaded, model_factory=model_factory, on_attempt=renderer.render_attempt,
+        )
+        for warning in run.reporting_errors:
+            print(f"reporting warning: {warning}", file=sys.stderr)
         grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
         return compare_experiment(
             run, grader=grader, prices_by_role=configured_prices(loaded),

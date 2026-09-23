@@ -154,3 +154,17 @@ def test_direct_scheduler_validates_all_labels_before_first_call() -> None:
     with pytest.raises(AssertionError):
         asyncio.run(run_experiment(loaded, dataset=dataset, systems=systems, grader=_Grader()))
     assert calls == []
+
+
+def test_failing_reporting_observer_cannot_change_results() -> None:
+    loaded, dataset, systems = _setup()
+    calls = []
+    systems = replace(systems, sas_runner=_Runner("single", calls), mas_runner=_Runner("multi", calls))
+    def fails(attempt):
+        raise RuntimeError("display unavailable")
+    run = asyncio.run(run_experiment(loaded, dataset=dataset, systems=systems,
+                                     grader=_Grader(), on_attempt=fails))
+    assert run.status == ExperimentStatus.COMPLETED
+    assert len(run.attempts) == len(dataset.cases) * 2
+    assert all(item.result.status == RunStatus.COMPLETED for item in run.attempts)
+    assert len(run.reporting_errors) == len(run.attempts)

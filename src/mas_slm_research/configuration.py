@@ -85,7 +85,7 @@ class DatasetConfig(_StrictSpec):
 
 
 class ReportingConfig(_StrictSpec):
-    console: Literal["full", "summary", "none"] = "full"
+    console: Literal["full", "events", "summary", "none"] = "full"
     color: Literal["auto", "always", "never"] = "auto"
     output_directory: str | None = None
 
