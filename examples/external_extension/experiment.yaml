@@ -1,0 +1,46 @@
+version: 1
+name: researcher-word-count
+extensions: [research_extension]
+models:
+  baseline:
+    provider: openai
+    model_id: offline-word-count-baseline
+  small:
+    provider: vllm
+    model_id: offline-word-count-small
+  reviewer:
+    provider: openai
+    model_id: offline-word-count-reviewer
+agents:
+  baseline:
+    definition: research.single_v1
+    model: baseline
+  counter:
+    definition: research.counter_v1
+    model: small
+  reviewer:
+    definition: research.reviewer_v1
+sas:
+  agent: baseline
+  model: baseline
+mas:
+  default_model: small
+  agents:
+    counter_agent: counter
+    reviewer_agent: reviewer
+  model_overrides:
+    reviewer_agent: reviewer
+  workflow: workflow.yaml
+dataset:
+  loader: jsonl
+  path: cases.jsonl
+grader: research.exact_word_count_v1
+repetitions: 1
+schedule: system_major
+reporting:
+  console: events
+  color: auto
+  output_directory: results
+telemetry:
+  enabled: false
+  exporter: memory

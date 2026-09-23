@@ -1,0 +1,42 @@
+version: 1
+definition: research.word_count_v1
+metadata:
+  workflow_id: researcher_word_count
+  name: Word count with reviewer
+  version: 1.0.0
+participating_agents: [counter_agent, reviewer_agent]
+sources:
+  counter:
+    source_id: counter
+    name: Word counter
+    agent_names: [counter_agent]
+start_agents: [counter_agent]
+finalizing_agents: [reviewer_agent]
+allowed_handoffs:
+  counter_agent: [reviewer_agent]
+  reviewer_agent: []
+gates:
+  reviewer_gate:
+    gate_id: reviewer_gate
+    name: Counter result received
+    required_sources: [counter]
+    incoming_from: []
+    target_node: reviewer_agent
+    metadata:
+      gate_type: readiness_gate
+      ready_rule: requires_required_sources_to_handoff_to_target
+agent_metadata:
+  counter_agent: {role: counter}
+  reviewer_agent: {role: reviewer}
+workflow_metadata:
+  workflow_family: external_word_count
+payloads:
+  counter_agent:
+    builder: research.counter_payload_v1
+    input_schema: research.text_input_v1
+  reviewer_agent:
+    builder: research.reviewer_payload_v1
+    input_schema: research.text_input_v1
+handoff_schemas:
+  counter_agent:
+    reviewer_agent: research.count_handoff_v1
