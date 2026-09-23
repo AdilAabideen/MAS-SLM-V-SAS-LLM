@@ -14,6 +14,7 @@ from typing import Any, Mapping, Sequence
 from langchain_core.messages import AIMessage
 
 from .comparison import compare_experiment, configured_prices
+from .artifacts import ArtifactError, ArtifactWriter, summarize_artifacts
 from .console import ConsoleRenderer
 from .configuration import ConfigurationError, load_configuration
 from .configured_systems import build_configured_systems
@@ -35,7 +36,7 @@ EXIT_INTERRUPTED = 130
 class _ScriptedModel:
     """One fresh, deterministic response sequence for an offline demo role."""
 
-    def __init__(self, responses: Sequence[AIMessage]) -> None:
+    def __init__(self, responses: Sequence[tuple[AIMessage, int]]) -> None:
         self._responses = iter(responses)
 
     def bind_tools(self, tools: Any, **kwargs: Any) -> "_ScriptedModel":
@@ -43,9 +44,12 @@ class _ScriptedModel:
 
     async def ainvoke(self, messages: Any) -> AIMessage:
         try:
-            return next(self._responses)
+            response, delay_ms = next(self._responses)
         except StopIteration as exc:
             raise RuntimeError("offline fixture response sequence exhausted") from exc
+        if delay_ms:
+            await asyncio.sleep(delay_ms / 1000)
+        return response
 
 
 def _load_fixture(path: Path | None) -> tuple[Mapping[str, str] | None, Any]:
@@ -61,19 +65,21 @@ def _load_fixture(path: Path | None) -> tuple[Mapping[str, str] | None, Any]:
     if not all(isinstance(key, str) and isinstance(value, str) for key, value in environment.items()):
         raise ValueError("offline fixture environment must contain string names and values")
     roles = data["roles"]
-    scripted: dict[str, tuple[AIMessage, ...]] = {}
+    scripted: dict[str, tuple[tuple[AIMessage, int], ...]] = {}
     for role, rows in roles.items():
         if not isinstance(role, str) or not isinstance(rows, list) or not rows:
             raise ValueError("offline fixture roles must map names to nonempty response lists")
-        messages: list[AIMessage] = []
+        messages: list[tuple[AIMessage, int]] = []
         for row in rows:
-            if not isinstance(row, dict) or set(row) - {"content", "tool_calls"}:
+            if not isinstance(row, dict) or set(row) - {"content", "tool_calls", "delay_ms"}:
                 raise ValueError(f"offline fixture role {role}: response has unknown fields")
             content = row.get("content", "")
             tool_calls = row.get("tool_calls", [])
-            if not isinstance(content, str) or not isinstance(tool_calls, list):
+            delay_ms = row.get("delay_ms", 0)
+            if (not isinstance(content, str) or not isinstance(tool_calls, list)
+                    or not isinstance(delay_ms, int) or isinstance(delay_ms, bool) or not 0 <= delay_ms <= 10000):
                 raise ValueError(f"offline fixture role {role}: invalid response")
-            messages.append(AIMessage(content=content, tool_calls=tool_calls))
+            messages.append((AIMessage(content=content, tool_calls=tool_calls), delay_ms))
         scripted[role] = tuple(messages)
 
     def model_factory(model: Any, role: str) -> _ScriptedModel:
@@ -104,18 +110,25 @@ def _parser() -> argparse.ArgumentParser:
             trace = command.add_mutually_exclusive_group()
             trace.add_argument("--trace", action="store_true", help="Enable configured span recording/export")
             trace.add_argument("--no-trace", action="store_true", help="Disable configured span recording/export")
+        if name == "compare":
+            command.add_argument("--output-dir", type=Path, help="New artifact directory; overrides YAML")
+            command.add_argument("--no-artifacts", action="store_true", help="Return JSON without saving files")
+            command.add_argument("--events-file", action="store_true", help="Also save payload-free event metadata")
     summary = commands.add_parser("summarize")
-    summary.add_argument("report", type=Path, help="JSON report captured from compare stdout")
+    summary.add_argument("report", type=Path, help="Artifact directory or compare JSON report")
     return parser
 
 
 async def _execute(args: argparse.Namespace) -> dict[str, Any]:
     if args.command == "summarize":
-        try:
-            report = json.loads(args.report.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise ValueError(f"report {args.report}: {exc}") from exc
-        if not isinstance(report, dict) or not isinstance(report.get("systems"), dict) or not isinstance(report.get("pairs"), list):
+        if args.report.is_dir():
+            report = summarize_artifacts(args.report).to_dict()
+        else:
+            try:
+                report = json.loads(args.report.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                raise ValueError(f"report {args.report}: {exc}") from exc
+        if not isinstance(report, dict) or not isinstance(report.get("systems"), dict) or not isinstance(report.get("pairs"), (list, tuple)):
             raise ValueError("report must be JSON emitted by compare")
         return {key: report[key] for key in (
             "experiment_id", "experiment_status", "systems", "single_wins", "multi_wins", "ties", "uncomparable_pairs"
@@ -176,9 +189,37 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         return {"result": execution.result.to_dict(), "grade": grade.to_dict()}
     if args.command == "compare":
         assert renderer is not None
-        run = await run_configured_experiment(
-            loaded, model_factory=model_factory, on_attempt=renderer.render_attempt,
-        )
+        output_dir = None if args.no_artifacts else args.output_dir or loaded.output_directory
+        if args.events_file and output_dir is None:
+            raise ValueError("--events-file requires an artifact output directory")
+        writer = None
+        experiment_id = str(uuid.uuid4())
+        prices = configured_prices(loaded)
+        if output_dir is not None:
+            dataset = load_configured_dataset(loaded)
+            writer = ArtifactWriter(
+                directory=output_dir, loaded=loaded, dataset=dataset,
+                experiment_id=experiment_id, prices_by_role=prices,
+                include_events=args.events_file,
+                environment=fixture_env or os.environ,
+            )
+
+        def observe(attempt):
+            if writer is not None:
+                writer.record_attempt(attempt)
+            renderer.render_attempt(attempt)
+
+        try:
+            run = await run_configured_experiment(
+                loaded, model_factory=model_factory, experiment_id=experiment_id,
+                on_attempt=observe,
+            )
+            if writer is not None and writer.manifest["attempts_written"] != len(run.attempts):
+                raise ArtifactError("artifact writer missed one or more attempts")
+        except BaseException:
+            if writer is not None:
+                writer.mark_interrupted()
+            raise
         for warning in run.reporting_errors:
             print(f"reporting warning: {warning}", file=sys.stderr)
         trace = trace_experiment(run, config=trace_config, environment=fixture_env or os.environ)
@@ -187,9 +228,15 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         for warning in trace.warnings:
             print(f"tracing warning: {warning}", file=sys.stderr)
         grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
-        return compare_experiment(
-            run, grader=grader, prices_by_role=configured_prices(loaded),
-        ).to_dict()
+        report = compare_experiment(run, grader=grader, prices_by_role=prices)
+        if writer is not None:
+            try:
+                writer.finalize(run, report)
+            except BaseException:
+                writer.mark_interrupted()
+                raise
+            print(f"artifacts: {output_dir}", file=sys.stderr)
+        return report.to_dict()
     raise AssertionError(f"unhandled command {args.command}")
 
 
@@ -198,11 +245,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         output = asyncio.run(_execute(args))
         print(json.dumps(output, indent=2, ensure_ascii=False, default=str))
+        if args.command == "compare" and output.get("experiment_status") == "cancelled":
+            return EXIT_INTERRUPTED
         return EXIT_OK
     except KeyboardInterrupt:
         print("interrupted", file=sys.stderr)
         return EXIT_INTERRUPTED
-    except (ConfigurationError, DatasetError, ValueError, KeyError) as exc:
+    except (ConfigurationError, DatasetError, ArtifactError, ValueError, KeyError) as exc:
         print(f"invalid input: {exc}", file=sys.stderr)
         return EXIT_INVALID_INPUT
     except Exception as exc:
