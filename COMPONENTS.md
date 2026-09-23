@@ -1,0 +1,45 @@
+# Registering research components
+
+Create a Python module with `register_components(registry)`. The experiment
+loader will import only the module names explicitly selected by the researcher.
+For now, a clone can call `registry.load_module("my_research.components")`.
+Registration IDs are unique within each component kind; a duplicate or unknown
+ID raises an error before inference. A failed extension registration is rolled
+back as one unit.
+
+```python
+from mas_slm_research.registry import ComponentRegistry
+
+def register_components(registry: ComponentRegistry) -> None:
+    registry.register("agents", "my.agent_v1", MyAgentDefinition)
+    registry.register("dataset_loaders", "my.jsonl_v1", load_my_cases)
+    registry.register("graders", "my.score_v1", MyGrader)
+```
+
+The component kinds are `providers`, `models`, `agents`, `tools`, `schemas`,
+`payload_builders`, `workflows`, `dataset_loaders`, and `graders`. Providers,
+payload builders, and dataset loaders are callable. Agent definitions may be
+callable or subclass `AgentDefinition` and implement `build_kernel`. Tools are callable
+or expose `invoke`. Schemas are Pydantic `BaseModel` subclasses. Workflows are
+`WorkflowDefinition` instances or factories. Models are `ModelSpec` instances
+or factories. A grader is a class/factory or an instance exposing `evaluate`
+and `aggregate`. The runner-specific arguments and return contracts will be
+stabilized with the experiment-runner tickets; registration
+itself never invokes a model or loads data.
+
+Call `register_builtin_components(registry)` to install the preserved ESI
+workflow, its role payload builders, and the existing model catalog. The
+registration remains separate from runtime construction, so inspecting the
+inventory does not connect to any provider. Built-in ESI agents, tools, and
+schemas are also registered. Use `registry.inventory()` or
+`registry.ids(kind)` to see effective IDs, and `registry.resolve(kind, id)` to
+obtain an implementation.
+
+An `AgentDefinition.build_kernel` method receives the selected `model`,
+`runtime_config`, resolved `workflow` (or `None` for SAS), route-to-schema
+`handoff_schemas`, and the `registry`. It returns a fresh `AgentKernel` for
+each case attempt. A provider factory receives a `ResolvedModel` and an
+environment mapping; it returns a LangChain-compatible chat model. A role
+payload builder receives the scoped MAS state and returns a dictionary with
+an `llm_payload` dictionary. The configured constructor validates ESI role
+names, route schemas, and final-output schemas before a case can run.

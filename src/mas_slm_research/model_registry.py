@@ -325,6 +325,11 @@ class ProviderSettings:
 def build_registered_model(model_id: str, provider_settings: ProviderSettings) -> BaseChatModel:
     """Build a preserved registered model from explicit connection settings."""
     spec = resolve_model_spec(model_id)
+    return build_model_from_spec(spec, provider_settings)
+
+
+def build_model_from_spec(spec: ModelSpec, provider_settings: ProviderSettings) -> BaseChatModel:
+    """Build a provider model from an explicit effective spec and settings."""
     if spec.provider == "openai":
         return _build_azure_model(spec, provider_settings)
     if spec.provider == "dr7":
