@@ -13,6 +13,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from mas_slm_research.configuration import load_configuration
+from mas_slm_research.comparison import compare_experiment, configured_prices
 from mas_slm_research.configured_systems import build_configured_systems
 from mas_slm_research.contracts import RunIdentity, RunStatus
 from mas_slm_research.experiment import ExperimentStatus, run_configured_experiment
@@ -351,3 +352,11 @@ def test_registered_esi_dataset_runs_both_arms_in_system_major_order() -> None:
     assert all(pair.single and pair.multi for pair in run.pairs)
     assert all(attempt.result.status == RunStatus.COMPLETED for attempt in run.attempts)
     assert all(attempt.grade.status.value == "graded" for attempt in run.attempts)
+    grader = loaded.registry.resolve("graders", loaded.experiment.grader)
+    report = compare_experiment(run, grader=grader, prices_by_role=configured_prices(loaded))
+    assert report.systems["single"].attempted == 3
+    assert report.systems["multi"].attempted == 3
+    assert report.systems["single"].grader_summary["attempted"] == 3
+    assert report.systems["multi"].grader_summary["attempted"] == 3
+    assert report.systems["single"].cost_usd_estimate is None
+    assert len(report.pairs) == 3
