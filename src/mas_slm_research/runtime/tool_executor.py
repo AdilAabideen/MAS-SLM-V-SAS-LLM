@@ -14,7 +14,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel
 
-from app.agentic.protocols import NormalizedToolCall
+from mas_slm_research.protocols import NormalizedToolCall
 
 
 ToolCallInput = Union[Mapping[str, Any], NormalizedToolCall]

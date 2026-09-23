@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.tools import BaseTool, tool as lc_tool
 from pydantic import BaseModel, ConfigDict
 
-from app.agentic.protocols import (
+from mas_slm_research.protocols import (
     build_system_prompt,
     extract_tool_calls_with_priority,
     looks_like_malformed_tool_call_content,
@@ -24,14 +24,14 @@ from mas_slm_research.runtime.finalization_policy import FinalizationPolicy
 from mas_slm_research.runtime.handoff_policy import HandoffPolicy
 from mas_slm_research.runtime.runtime_config import RuntimeConfig
 from mas_slm_research.runtime.tool_executor import ToolExecutionTrace, ToolExecutor
-from app.agentic.telemetry import (
+from mas_slm_research.telemetry import (
     EventEmitter,
     LLMCallMetric,
     TelemetryEmitter,
     TokenEstimator,
     ToolExecutionMetric,
 )
-from app.agentic.telemetry.usage_extractor import extract_provider_usage
+from mas_slm_research.telemetry.usage_extractor import extract_provider_usage
 
 
 class AgentKernel:

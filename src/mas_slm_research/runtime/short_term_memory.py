@@ -7,8 +7,8 @@ from typing import Any, Callable, Mapping
 
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
-from app.agentic.protocols import to_provider_messages
-from app.agentic.telemetry import TokenEstimator
+from mas_slm_research.protocols import to_provider_messages
+from mas_slm_research.telemetry import TokenEstimator
 
 
 @dataclass(frozen=True)

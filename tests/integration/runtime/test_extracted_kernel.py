@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.agentic.AgentRuntime import AgentKernel as LegacyAgentKernel
 from app.agentic.telemetry import token_estimator
 from mas_slm_research.kernel import AgentKernel
+from mas_slm_research.telemetry import token_estimator as extracted_token_estimator
 from tests.doubles.fake_emitters import Collector
 from tests.doubles.fake_provider import FakeChatModel
 
@@ -35,6 +36,7 @@ def final_answer(recommendation: dict) -> dict:
 @pytest.fixture(autouse=True)
 def offline_token_estimation(monkeypatch):
     monkeypatch.setattr(token_estimator, "tiktoken", None)
+    monkeypatch.setattr(extracted_token_estimator, "tiktoken", None)
 
 
 @pytest.mark.integration

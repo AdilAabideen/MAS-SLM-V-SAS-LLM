@@ -10,7 +10,7 @@ except ImportError:  # Python < 3.10
 
 from langchain_core.messages import AIMessage, BaseMessage
 
-from app.agentic.protocols import NormalizedToolCall
+from mas_slm_research.protocols import NormalizedToolCall
 
 
 # JSON-like runtime payload aliases
