@@ -1,0 +1,41 @@
+# Split experiment configuration
+
+An experiment selects registered Python components in YAML. The experiment
+file names the SAS agent and model, the MAS default model and role assignments,
+the dataset loader, and the grader. Its `mas.workflow` points to a second YAML
+file containing the communication graph, payload builders, payload schemas,
+source groups, and gates. See
+[`examples/esi/experiment.yaml`](examples/esi/experiment.yaml) and
+[`examples/esi/workflow.yaml`](examples/esi/workflow.yaml).
+
+`load_configuration(path, registry=...)` validates both files without a model
+call. Start with `ComponentRegistry()` and `register_builtin_components(...)`,
+then explicitly register your own implementations or list extension modules
+under `extensions`. An extension module must export
+`register_components(registry)`; there is no automatic discovery or executable
+YAML expression. The ESI agent, schema, dataset, and grader adapters are being
+connected in the next construction and experiment tickets. Until then, the
+included ESI files are a validated configuration contract, not a runnable
+benchmark by themselves.
+
+Each model entry chooses one of `model_env`, `model_id`, or `catalog`. A
+`model_env` points to an environment variable containing the provider model ID.
+`api_key_env` and `base_url_env` name variables whose values must be present;
+the resolved specification stores those names, never their values. The loader
+resolves the workflow, dataset, and output paths relative to the experiment
+file. `safe_snapshot()` contains the chosen IDs, model names, graph, and paths
+without credentials. It can be saved or printed for review.
+
+The loader rejects duplicate YAML keys, unknown fields and registration IDs,
+blank required environment variables, unknown agents/models, incomplete role
+assignments, missing route payload schemas, unreachable agents or finalizers,
+and cycles in handoff routes. If `definition` selects a registered workflow
+instance, the declarative graph must match it exactly; a disagreement is an
+error rather than a silently ignored override. Error messages include the
+declaring filename and the relevant field or route.
+
+The `sas.model` selection is explicit. If its agent also declares `model`, the
+two must agree. For MAS, each role names an agent under `mas.agents`;
+`mas.model_overrides` can select a different configured model per role. Agent
+level model choices, the MAS default, and effective precedence will be applied
+and shown by the system constructor and preview tickets.
