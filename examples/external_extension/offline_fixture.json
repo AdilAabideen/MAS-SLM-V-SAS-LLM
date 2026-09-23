@@ -1,0 +1,16 @@
+{
+  "environment": {},
+  "roles": {
+    "baseline": [
+      {"tool_calls": [{"id": "single-count", "name": "count_words", "args": {"text": "red blue green"}}]},
+      {"tool_calls": [{"id": "single-answer", "name": "final_answer", "args": {"count": 3}}]}
+    ],
+    "counter_agent": [
+      {"tool_calls": [{"id": "counter-count", "name": "count_words", "args": {"text": "red blue green"}}]},
+      {"tool_calls": [{"id": "counter-handoff", "name": "send_count_to_reviewer", "args": {"count": 3, "method": "count_words tool"}}]}
+    ],
+    "reviewer_agent": [
+      {"tool_calls": [{"id": "reviewer-answer", "name": "final_answer", "args": {"count": 3}}]}
+    ]
+  }
+}
