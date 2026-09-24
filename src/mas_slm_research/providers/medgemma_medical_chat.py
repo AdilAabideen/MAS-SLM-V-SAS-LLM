@@ -37,7 +37,7 @@ class MedGemmaMedicalChatModel(BaseChatModel):
     """
 
     model: str = Field(description="Dr7 model id (e.g. 'medgemma-4b-it').")
-    base_url: str = Field(description="Base URL, e.g. 'https://dr7.ai/api/v1/medical'.")
+    base_url: str = Field(description="Dr7 medical API base URL or full chat/completions endpoint.")
     api_key: str = Field(description="Dr7 API key (Bearer token).", repr=False)
 
     temperature: float = 0.7
@@ -183,7 +183,9 @@ class MedGemmaMedicalChatModel(BaseChatModel):
         if stop:
             payload["stop"] = stop
 
-        url = self.base_url.rstrip("/") + "/chat/completions"
+        configured_url = self.base_url.rstrip("/")
+        url = (configured_url if configured_url.lower().endswith("/chat/completions")
+               else configured_url + "/chat/completions")
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -200,8 +202,11 @@ class MedGemmaMedicalChatModel(BaseChatModel):
 
         if resp.status_code >= 400:
             detail = (resp.text or "").strip()
-            if len(detail) > 5000:
-                detail = detail[:5000] + "…(truncated)"
+            content_type = str(getattr(resp, "headers", {}).get("content-type", "")).lower()
+            if "text/html" in content_type or "<html" in detail[:200].lower():
+                detail = "HTML page returned instead of API JSON; check DR7_BASE_URL and the endpoint route"
+            elif len(detail) > 500:
+                detail = detail[:500] + "…(truncated)"
             error = RuntimeError(f"Dr7 API error {resp.status_code}: {detail}")
             error.network_attempts = network_attempts
             raise error
