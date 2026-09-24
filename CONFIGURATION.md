@@ -44,6 +44,12 @@ resolves the workflow, dataset, and output paths relative to the experiment
 file. `safe_snapshot()` contains the chosen IDs, model names, graph, and paths
 without credentials. It can be saved or printed for review.
 
+When called through the CLI, these references can come from the nearest `.env`
+file in the experiment file's ancestor directories (up to the home directory).
+Exported shell variables take precedence over `.env` values. Python callers of
+`load_configuration` can still pass their own explicit `environment` mapping.
+An explicit CLI `--fixture` uses only its scripted environment.
+
 The loader rejects duplicate YAML keys, unknown fields and registration IDs,
 blank required environment variables, unknown agents/models, incomplete role
 assignments, missing route payload schemas, unreachable agents or finalizers,
