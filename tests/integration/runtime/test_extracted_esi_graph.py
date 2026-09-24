@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from app.agentic.payload_builder import build_pending_agent_payload as legacy_payload
 from mas_slm_research.mas.agent_node_executor import AgentNodeExecutor
 from mas_slm_research.mas.execution_strategy import CallableExecutionStrategy
 from mas_slm_research.mas.gate_evaluator import GateEvaluator
@@ -49,7 +48,7 @@ def test_extracted_graph_preserves_every_esi_route_gate_and_role_projection(acui
     async def execute(request):
         requests.append(request)
         name = request.agent_name
-        assert request.pending_agent_payload == legacy_payload(name, request.state_snapshot)
+        assert "llm_payload" in request.pending_agent_payload
         if name == "doctor_agent":
             return AgentExecutionResult(agent_name=name, status="final", final_output={"esi": 2})
         target = "doctor_agent" if name == "vitals_agent" or name == acuity_path[-1] else acuity_path[acuity_path.index(name) + 1]

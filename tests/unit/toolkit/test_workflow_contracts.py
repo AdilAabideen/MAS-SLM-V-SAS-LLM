@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import ToolMessage
 
-from app.agentic.workflows.definitions.esi_mas.workflow_definition import ESI_MAS as LEGACY_ESI
 from mas_slm_research.mas_contract import AgentExecutionResult, HandoffEnvelope, HandoffResult
 from mas_slm_research.runtime.handoff_policy import HandoffPolicy
 from mas_slm_research.workflows.definition import WorkflowDefinition, WorkflowMetadata
@@ -53,7 +52,16 @@ def test_unrelated_workflow_accepts_its_route_and_rejects_unknown_or_reverse_rou
 
 @pytest.mark.unit
 def test_esi_definition_and_handoff_policy_preserve_declared_routes():
-    assert ESI_MAS.model_dump() == LEGACY_ESI.model_dump()
+    assert ESI_MAS.start_agents == ("esi1_agent", "vitals_agent")
+    assert ESI_MAS.finalizing_agents == ("doctor_agent",)
+    assert ESI_MAS.allowed_handoffs == {
+        "esi1_agent": ("esi2_agent", "doctor_agent"),
+        "esi2_agent": ("esi345_agent", "doctor_agent"),
+        "esi345_agent": ("doctor_agent",),
+        "vitals_agent": ("doctor_agent",),
+        "doctor_agent": (),
+    }
+    assert ESI_MAS.gates["doctor_gate"].required_sources == ("acuity", "vitals")
     result = HandoffResult(
         handoff_name="to_doctor", from_agent="esi1_agent", target_agent="doctor_agent",
         payload_schema="ESI1Payload", payload={"is_esi1": True},

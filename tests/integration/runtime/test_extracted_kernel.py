@@ -11,10 +11,7 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 from pydantic import BaseModel
 
-from app.agentic.AgentRuntime import AgentKernel as LegacyAgentKernel
-from app.agentic.telemetry import token_estimator
 from mas_slm_research.kernel import AgentKernel
-from mas_slm_research.telemetry import token_estimator as extracted_token_estimator
 from tests.doubles.fake_emitters import Collector
 from tests.doubles.fake_provider import FakeChatModel
 
@@ -33,12 +30,6 @@ def final_answer(recommendation: dict) -> dict:
     return {"recommendation": recommendation}
 
 
-@pytest.fixture(autouse=True)
-def offline_token_estimation(monkeypatch):
-    monkeypatch.setattr(token_estimator, "tiktoken", None)
-    monkeypatch.setattr(extracted_token_estimator, "tiktoken", None)
-
-
 @pytest.mark.integration
 @pytest.mark.parametrize("call_style", ["native", "text", "malformed_then_text"])
 def test_extracted_loop_preserves_tool_replay_recovery_and_finalization(call_style):
@@ -53,28 +44,23 @@ def test_extracted_loop_preserves_tool_replay_recovery_and_finalization(call_sty
         script.append(AIMessage(content='{"tool_calls":[{"id":"lookup","name":"lookup_value","arguments":{"value":"abc"}}]}'))
     script.append(AIMessage(content="", tool_calls=[{"id": "final", "name": "final_answer", "args": {"recommendation": {"value": "abc"}}}]))
 
-    traces = []
-    for kernel_type in (LegacyAgentKernel, AgentKernel):
-        events = Collector()
-        model = FakeChatModel(list(script))
-        agent = kernel_type(
-            model=model, tools=[lookup_value, final_answer], response_format=Answer,
-            event_handlers=[events],
-        )
-        agent.set_event_context(run_id="case_1", agent_name="baseline")
-        result = asyncio.run(agent.ainvoke("case"))
-        traces.append((result, model.messages_seen, events.items))
+    events = Collector()
+    model = FakeChatModel(list(script))
+    agent = AgentKernel(
+        model=model, tools=[lookup_value, final_answer], response_format=Answer,
+        event_handlers=[events],
+    )
+    agent.set_event_context(run_id="case_1", agent_name="baseline")
+    result = asyncio.run(agent.ainvoke("case"))
 
-    legacy_result, legacy_messages, legacy_events = traces[0]
-    extracted_result, extracted_messages, extracted_events = traces[1]
-    assert extracted_result == legacy_result == {"recommendation": {"value": "abc"}, "ok": True}
-    assert len(extracted_messages) == len(legacy_messages) == len(script)
-    assert any(isinstance(message, ToolMessage) for message in extracted_messages[-1])
-    assert [event["event_type"] for event in extracted_events] == [event["event_type"] for event in legacy_events]
+    assert result == {"recommendation": {"value": "abc"}, "ok": True}
+    assert len(model.messages_seen) == len(script)
+    assert any(isinstance(message, ToolMessage) for message in model.messages_seen[-1])
+    assert any(event["event_type"] == "tool_call" for event in events.items)
     assert sum(
         event["event_type"] == "runtime_decision"
         and event["payload_json"].get("decision") == "retry_after_malformed_tool_call"
-        for event in extracted_events
+        for event in events.items
     ) == (1 if call_style == "malformed_then_text" else 0)
 
 

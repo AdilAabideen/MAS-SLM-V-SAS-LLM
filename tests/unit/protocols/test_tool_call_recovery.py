@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.agentic.protocols.tool_call_recovery import (
+from mas_slm_research.protocols.tool_call_recovery import (
     recover_from_fenced_json_text,
     recover_from_jsonl_text,
     recover_from_partial_json_text,

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.agentic.agents.esi1.evaluator import ES1AcuityEvaluator
-from app.agentic.agents.esi2.evaluator import ESI2AcuityEvaluator
-from app.agentic.agents.esi345.evaluator import ESI345AcuityEvaluator
-from app.agentic.agents.single_agent_system.evaluator import SingleAgentAcuityEvaluator
-from app.agentic.agents.vitals.evaluator import VitalsUptriageEvaluator
+from mas_slm_research.evaluation.legacy_esi1 import ES1AcuityEvaluator
+from mas_slm_research.evaluation.legacy_esi2 import ESI2AcuityEvaluator
+from mas_slm_research.evaluation.legacy_esi345 import ESI345AcuityEvaluator
+from mas_slm_research.evaluation.legacy_single_agent_acuity import SingleAgentAcuityEvaluator
+from mas_slm_research.evaluation.legacy_vitals import VitalsUptriageEvaluator
 
 
 @pytest.mark.unit

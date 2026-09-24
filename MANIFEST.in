@@ -1,0 +1,16 @@
+include README.md
+include CLI.md
+include ARTIFACTS.md
+include COMPARISON.md
+include COMPONENTS.md
+include CONFIGURATION.md
+include CONSOLE_TRACES.md
+include DATASETS.md
+include ESI_BENCHMARK.md
+include EXPERIMENTS.md
+include GRADING.md
+include TRACING.md
+recursive-include examples *.md *.py *.yaml *.jsonl *.json
+recursive-exclude docs *
+recursive-exclude results *
+global-exclude *.db *.sqlite *.pyc .env

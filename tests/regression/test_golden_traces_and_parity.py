@@ -8,14 +8,14 @@ import pytest
 from langchain_core.messages import AIMessage
 from pydantic import BaseModel
 
-from app.agentic.AgentRuntime import AgentKernel
-from app.agentic.agents.vitals.evaluator import VitalsUptriageEvaluator
-from app.agentic.protocols.tool_call_recovery import (
+from mas_slm_research.kernel import AgentKernel
+from mas_slm_research.evaluation.legacy_vitals import VitalsUptriageEvaluator
+from mas_slm_research.protocols.tool_call_recovery import (
     looks_like_malformed_tool_call_content,
     recover_tool_calls_from_content,
 )
-from app.agentic.protocols.tool_protocol import normalize_tool_calls
-from app.agentic.runtime.runtime_config import RuntimeConfig
+from mas_slm_research.protocols.tool_protocol import normalize_tool_calls
+from mas_slm_research.runtime.runtime_config import RuntimeConfig
 from tests.doubles.fake_provider import FakeChatModel
 
 

@@ -5,14 +5,14 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from pydantic import ValidationError
 
-from app.agentic.mas.agent_node_executor import AgentNodeExecutor
-from app.agentic.mas.execution_strategy import CallableExecutionStrategy
-from app.agentic.mas.gate_evaluator import GateEvaluator
-from app.agentic.mas.graph_builder import MASGraphBuilder
-from app.agentic.mas_contract import AgentExecutionResult, HandoffEnvelope, make_initial_mas_state
-from app.agentic.workflows.definitions.esi_mas.workflow_definition import ESI_MAS
+from mas_slm_research.mas.agent_node_executor import AgentNodeExecutor
+from mas_slm_research.mas.execution_strategy import CallableExecutionStrategy
+from mas_slm_research.mas.gate_evaluator import GateEvaluator
+from mas_slm_research.mas.graph_builder import MASGraphBuilder
+from mas_slm_research.mas_contract import AgentExecutionResult, HandoffEnvelope, make_initial_mas_state
+from mas_slm_research.workflows.esi.definition import ESI_MAS
+from mas_slm_research.workflows.esi.payload_builder import build_pending_agent_payload
 
 
 CASE = {"chiefcomplaint": "chest pain", "age": 42, "heartrate": 111, "sbp": 96}
@@ -62,6 +62,7 @@ def test_baseline_graph_routes_and_gates(acuity_path):
         agent_executor=AgentNodeExecutor(
             workflow=ESI_MAS,
             strategy=CallableExecutionStrategy(mode="scripted", execute_fn=execute),
+            payload_builder=build_pending_agent_payload,
         ),
         gate_evaluator=GateEvaluator(workflow=ESI_MAS),
     ).build()
@@ -117,11 +118,11 @@ def test_doctor_gate_waits_for_both_handoff_arrival_orders(first_source):
 @pytest.mark.integration
 def test_invalid_handoff_route_is_rejected_before_graph_execution():
     """An agent cannot bypass the declared ESI route."""
-    with pytest.raises(ValidationError, match="Invalid handoff route"):
+    with pytest.raises(ValueError, match="Invalid handoff route"):
         HandoffEnvelope(
             handoff_name="invalid",
             from_agent="vitals_agent",
             target_agent="esi2_agent",
             payload_schema="test_payload",
             payload={},
-        )
+        ).validate_for(ESI_MAS)

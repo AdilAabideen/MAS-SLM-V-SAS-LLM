@@ -30,3 +30,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "mas_slm_research.benchmarks.esi" = ["*.yaml", "*.jsonl", "*.json"]
+
+[tool.setuptools.data-files]
+"share/mas-slm-research/examples/esi" = ["examples/esi/*.yaml", "examples/esi/*.jsonl", "examples/esi/*.json"]
+"share/mas-slm-research/examples/arithmetic" = ["examples/arithmetic/*.md", "examples/arithmetic/*.py", "examples/arithmetic/*.yaml", "examples/arithmetic/*.jsonl", "examples/arithmetic/*.json"]
+"share/mas-slm-research/examples/external_extension" = ["examples/external_extension/*.md", "examples/external_extension/*.py", "examples/external_extension/*.yaml", "examples/external_extension/*.jsonl", "examples/external_extension/*.json"]

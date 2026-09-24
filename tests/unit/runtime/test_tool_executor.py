@@ -8,7 +8,7 @@ import pytest
 from langchain_core.tools import tool
 from pydantic import BaseModel
 
-from app.agentic.runtime.tool_executor import ToolExecutor
+from mas_slm_research.runtime.tool_executor import ToolExecutor
 
 
 class SampleModel(BaseModel):

@@ -2,13 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
 permissions:
   contents: read
@@ -17,123 +13,26 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  PYTHON_VERSION: "3.11"
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  OPENAI_API_KEY: test-openai-key
-  DR7_API_KEY: test-dr7-key
-  DATABASE_URL: sqlite:///ci.db
-
 jobs:
-  lint:
-    name: Lint
+  research-toolkit:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: '3.11'
           cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install ruff
-
-      - name: Compile Python modules
-        run: python -m compileall -q app tests
-
-      - name: Ruff fatal checks
-        run: ruff check app tests --select E9,F63,F7,F82
-
-  unit-tests:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest httpx
-
-      - name: Run unit tests
-        run: pytest tests/unit -q
-
-  runtime-integration:
-    name: Runtime Integration
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest httpx
-
-      - name: Run runtime integration tests
-        run: pytest tests/integration/runtime -q
-
-  persistence-api-integration:
-    name: Persistence and API Integration
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest httpx
-
-      - name: Run persistence and API integration tests
-        run: pytest tests/integration/repositories tests/integration/api -q
-
-  regression-tests:
-    name: Regression Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest httpx
-
-      - name: Run regression tests
-        run: pytest tests/regression -q
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Compile package and examples
+        run: python -m compileall -q src tests examples
+      - name: Check fatal lint errors
+        run: ruff check src tests examples --select E9,F63,F7,F82
+      - name: Run retained research tests
+        env:
+          PYTHONPATH: src
+        run: python -m pytest -q
+      - name: Run offline comparison without backend imports
+        env:
+          PYTHONPATH: src:examples/arithmetic
+        run: python -m mas_slm_research.cli compare examples/arithmetic/experiment.yaml --fixture examples/arithmetic/offline_fixture.json --no-artifacts --console none --color never

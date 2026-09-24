@@ -7,10 +7,10 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from app.agentic.agents.esi1.schema import ES1AgentInput, ES1AgentOutput
-from app.agentic.agents.esi2.schema import ES2AgentInput, ES2AgentOutput
-from app.agentic.agents.esi345.schema import ES345AgentInput, ES345AgentOutput
-from app.agentic.agents.vitals.schema import VitalsAgentOutput
+from mas_slm_research.agents.esi.esi1.schema import ES1AgentInput, ES1AgentOutput
+from mas_slm_research.agents.esi.esi2.schema import ES2AgentInput, ES2AgentOutput
+from mas_slm_research.agents.esi.esi345.schema import ES345AgentInput, ES345AgentOutput
+from mas_slm_research.agents.esi.vitals.schema import VitalsAgentOutput
 
 
 @pytest.mark.unit

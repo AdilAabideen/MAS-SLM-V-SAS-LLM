@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.agentic.tools.vitals_agent.compute_esi_danger_zone import (
+from mas_slm_research.tools.esi.compute_esi_danger_zone import (
     ESI_Danger_Zone_Vitals,
     compute_esi_danger_zone,
 )
-from app.agentic.tools.vitals_agent.compute_shock_index import ShockIndexInput, compute_shock_index
+from mas_slm_research.tools.esi.compute_shock_index import ShockIndexInput, compute_shock_index
 
 
 @pytest.mark.unit

@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.agentic.protocols.protocol_types import ToolCallParseSource
-from app.agentic.protocols.tool_protocol import normalize_tool_calls_typed
+from mas_slm_research.protocols.protocol_types import ToolCallParseSource
+from mas_slm_research.protocols.tool_protocol import normalize_tool_calls_typed
 
 
 @pytest.mark.unit
@@ -82,7 +82,7 @@ def test_ut_pro_009_preserve_allowed_tool_when_allow_list_present():
 def test_ut_pro_010_generate_id_when_missing():
     """Handle ut pro 010 generate id when missing."""
     # Keep the main step clear.
-    with patch("app.agentic.protocols.tool_protocol.uuid.uuid4") as mocked_uuid:
+    with patch("mas_slm_research.protocols.tool_protocol.uuid.uuid4") as mocked_uuid:
         mocked_uuid.return_value.hex = "abcdef1234567890"
         calls = normalize_tool_calls_typed([{"name": "tool_a", "arguments": {}}])
     assert calls[0].id == "call_abcdef123456"
@@ -92,7 +92,7 @@ def test_ut_pro_010_generate_id_when_missing():
 def test_ut_pro_011_deduplicate_repeated_ids():
     """Handle ut pro 011 deduplicate repeated ids."""
     # Keep the main step clear.
-    with patch("app.agentic.protocols.tool_protocol.uuid.uuid4") as mocked_uuid:
+    with patch("mas_slm_research.protocols.tool_protocol.uuid.uuid4") as mocked_uuid:
         mocked_uuid.return_value.hex = "deduped1234567890"
         calls = normalize_tool_calls_typed(
             [

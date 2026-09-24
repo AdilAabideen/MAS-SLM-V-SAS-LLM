@@ -6,10 +6,10 @@ from datetime import datetime
 
 import pytest
 
-from app.agentic.telemetry.event_emitter import EventEmitter
-from app.agentic.telemetry.metrics_types import LLMCallMetric, ToolExecutionMetric
-from app.agentic.telemetry.telemetry_emitter import TelemetryEmitter
-from app.agentic.telemetry.usage_extractor import extract_provider_usage
+from mas_slm_research.telemetry.event_emitter import EventEmitter
+from mas_slm_research.telemetry.metrics_types import LLMCallMetric, ToolExecutionMetric
+from mas_slm_research.telemetry.telemetry_emitter import TelemetryEmitter
+from mas_slm_research.telemetry.usage_extractor import extract_provider_usage
 
 
 class FakeResponse:

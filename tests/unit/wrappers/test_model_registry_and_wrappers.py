@@ -10,14 +10,16 @@ import pytest
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 
-from app.agentic.model_registry import (
+from mas_slm_research.model_registry import (
     FINETUNED_MULTI_AGENT_MODEL_ID_OVERRIDES,
+    ModelSpec,
+    ProviderSettings,
     build_vllm_model,
     list_registered_models,
     resolve_model_spec,
 )
-from app.agentic.models.medgemma_medical_chat import MedGemmaMedicalChatModel
-from app.agentic.models.vllm_chat import VLLMChat
+from mas_slm_research.providers.medgemma_medical_chat import MedGemmaMedicalChatModel
+from mas_slm_research.providers.vllm_chat import VLLMChat
 
 
 class FakeResponse:
@@ -201,7 +203,7 @@ def test_ut_wrp_009_dr7_wrapper_retries_once_on_429_then_succeeds(monkeypatch, l
         ],
         recorded,
     )
-    monkeypatch.setattr("app.agentic.models.medgemma_medical_chat.time.sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr("mas_slm_research.providers.medgemma_medical_chat.time.sleep", lambda seconds: sleeps.append(seconds))
     model = MedGemmaMedicalChatModel(
         model="medgemma-4b-it",
         base_url="https://dr7.test",
@@ -298,43 +300,35 @@ def test_ut_wrp_019_medgemma_default_registry_entry_uses_dr7():
 
 
 @pytest.mark.unit
-def test_ut_wrp_020_medgemma_vllm_alias_keeps_provider_model_id(monkeypatch):
+def test_ut_wrp_020_medgemma_vllm_alias_keeps_provider_model_id():
     """Handle ut wrp 020 medgemma vllm alias keeps provider model id."""
     # Keep the main step clear.
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "LLAMA_SERVER_SERIAL_REQUESTS", False)
     spec = resolve_model_spec("medgemma-4b-it-vllm")
-    model = build_vllm_model(spec)
+    model = build_vllm_model(spec, ProviderSettings(vllm_base_url="https://llama.test", vllm_serialize_requests=False))
     assert isinstance(model, VLLMChat)
     assert model.model == "medgemma-4b-it"
     assert model.serialize_requests is False
 
 
 @pytest.mark.unit
-def test_ut_wrp_020a_finetuned_vllm_registry_applies_agent_model_overrides(monkeypatch):
+def test_ut_wrp_020a_finetuned_vllm_registry_applies_agent_model_overrides():
     """Handle ut wrp 020a finetuned vllm registry applies agent model overrides."""
     # Keep the main step clear.
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "LLAMA_SERVER_SERIAL_REQUESTS", False)
     spec = resolve_model_spec("medgemma-4b-it-Finetuned")
-    model = build_vllm_model(spec)
+    model = build_vllm_model(spec, ProviderSettings(vllm_base_url="https://llama.test"))
     assert isinstance(model, VLLMChat)
     assert model.model == "medgemma-tool"
     assert model.agent_model_id_overrides == FINETUNED_MULTI_AGENT_MODEL_ID_OVERRIDES
 
 
 @pytest.mark.unit
-def test_ut_wrp_022_vllm_registry_threads_serialize_flag(monkeypatch):
+def test_ut_wrp_022_vllm_registry_threads_serialize_flag():
     """Handle ut wrp 022 vllm registry threads serialize flag."""
     # Keep the main step clear.
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "LLAMA_SERVER_SERIAL_REQUESTS", True)
-    monkeypatch.setattr(settings, "LLAMA_SERVER_TIMEOUT_S", 123.0)
     spec = resolve_model_spec("medgemma-4b-it-vllm")
-    model = build_vllm_model(spec)
+    model = build_vllm_model(spec, ProviderSettings(
+        vllm_base_url="https://llama.test", vllm_serialize_requests=True, vllm_timeout_s=123.0,
+    ))
     assert isinstance(model, VLLMChat)
     assert model.serialize_requests is True
     assert model.timeout_s == 123.0
@@ -421,11 +415,14 @@ def test_ut_wrp_024_registered_models_list_is_stable_and_sorted():
 
 
 @pytest.mark.unit
-def test_ut_wrp_025_unknown_vllm_model_mapping_raises_runtime_error():
-    """Handle ut wrp 025 unknown vllm model mapping raises runtime error."""
-    # Keep the main step clear.
-    with pytest.raises(RuntimeError):
-        build_vllm_model(resolve_model_spec("unknown-llama"))
+def test_ut_wrp_025_explicit_custom_vllm_model_is_supported():
+    """A researcher can select a custom vLLM checkpoint with explicit settings."""
+    model = build_vllm_model(
+        ModelSpec(id="custom-vllm", provider="vllm"),
+        ProviderSettings(vllm_base_url="https://llama.test"),
+    )
+    assert isinstance(model, VLLMChat)
+    assert model.model == "custom-vllm"
 
 
 @pytest.mark.unit

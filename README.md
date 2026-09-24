@@ -26,7 +26,7 @@ python -m pip install -e .
 mas-slm --help
 ```
 
-The package also builds as a wheel and includes a copyable ESI benchmark fixture. The project has not been published to a package index. [ESI_BENCHMARK.md](ESI_BENCHMARK.md) explains what is preserved and how to materialize bundled assets.
+The package also builds as a wheel and includes a copyable ESI benchmark fixture. The wheel and source archive include the three examples; a wheel installs them under its environment's `share/mas-slm-research/examples/` directory. The project has not been published to a package index. [ESI_BENCHMARK.md](ESI_BENCHMARK.md) explains what is preserved and how to materialize bundled assets.
 
 ## Configure a study
 
@@ -42,4 +42,4 @@ The console renderer has `none`, `summary`, `events`, and `full` modes and `auto
 
 Tracing is off by default. `--trace` enables the configured in-memory span tree or optional OTLP HTTP export; `--no-trace` disables it. For OTLP, install the optional `otel` extra and name endpoint/header environment variables in YAML. [TRACING.md](TRACING.md) gives the exporter configuration and limits.
 
-The original FastAPI/SQLite application remains in the repository during migration and is scheduled for removal in the backend-retirement milestone. The research CLI does not start it. Historical ESI prompts, tool ordering, routes, and scoring have preservation tests; corrected policies must use new versioned registrations so old and new experiment results remain distinguishable.
+The retired FastAPI/SQLite application has been removed. The research CLI runs directly from the extracted package without a server or database. Historical ESI prompts, tool ordering, routes, and scoring have preservation tests; corrected policies use new versioned registrations so old and new experiment results remain distinguishable. Token telemetry uses a deterministic character estimate by default, including offline runs. Call `TokenEstimator(prefer_tiktoken=True)` to opt into a locally available tokenizer; if it cannot load, estimation falls back to characters.

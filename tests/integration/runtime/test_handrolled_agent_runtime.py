@@ -8,9 +8,9 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 from pydantic import BaseModel
 
-from app.agentic.AgentRuntime import AgentKernel
-from app.agentic.runtime.runtime_config import RuntimeConfig
-from app.agentic.telemetry import token_estimator
+from mas_slm_research.kernel import AgentKernel
+from mas_slm_research.runtime.runtime_config import RuntimeConfig
+from mas_slm_research.telemetry import token_estimator
 from tests.doubles.fake_emitters import Collector
 from tests.doubles.fake_provider import FakeChatModel
 
