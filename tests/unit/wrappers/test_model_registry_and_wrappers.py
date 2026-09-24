@@ -126,6 +126,38 @@ def test_ut_wrp_001_dr7_wrapper_builds_bearer_auth_header(monkeypatch, load_json
 
 @pytest.mark.unit
 @pytest.mark.wrapper
+@pytest.mark.parametrize("configured_url", [
+    "https://dr7.test/api/v1/medical",
+    "https://dr7.test/api/v1/medical/",
+    "https://dr7.test/api/v1/medical/chat/completions",
+    "https://dr7.test/api/v1/medical/chat/completions/",
+])
+def test_dr7_accepts_base_or_complete_endpoint_without_appending_twice(
+    monkeypatch, load_json_fixture, configured_url,
+):
+    recorded = []
+    _patched_client(monkeypatch, FakeResponse(payload=load_json_fixture("provider_payloads/dr7_native_tool_calls.json")), recorded)
+    model = MedGemmaMedicalChatModel(model="medgemma-4b-it", base_url=configured_url, api_key="secret")
+    model._generate([HumanMessage(content="hi")], tools=[])
+    assert recorded[0]["url"] == "https://dr7.test/api/v1/medical/chat/completions"
+
+
+@pytest.mark.unit
+@pytest.mark.wrapper
+def test_dr7_html_error_reports_route_without_dumping_page(monkeypatch):
+    recorded = []
+    html = "<!DOCTYPE html><html><head><title>Not found</title></head><body>" + "page" * 1000
+    _patched_client(monkeypatch, FakeResponse(status_code=404, text=html, headers={"content-type": "text/html"}), recorded)
+    model = MedGemmaMedicalChatModel(model="medgemma-4b-it", base_url="https://dr7.test/api/v1/medical", api_key="secret")
+    with pytest.raises(RuntimeError, match="Dr7 API error 404") as caught:
+        model._generate([HumanMessage(content="hi")], tools=[])
+    assert "check DR7_BASE_URL" in str(caught.value)
+    assert "<!DOCTYPE" not in str(caught.value)
+    assert len(str(caught.value)) < 200
+
+
+@pytest.mark.unit
+@pytest.mark.wrapper
 def test_ut_wrp_003_dr7_wrapper_injects_tool_instruction_when_tools_bound(monkeypatch, load_json_fixture):
     """Handle ut wrp 003 dr7 wrapper injects tool instruction when tools bound."""
     # Keep the main step clear.
