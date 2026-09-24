@@ -133,7 +133,7 @@ def test_runner_marks_retry_usage_unknown_but_counts_network_attempts():
 
     attempt = SimpleNamespace(
         execution=SimpleNamespace(llm_calls=run.llm_calls, tool_calls=run.tool_calls, events=run.events),
-        result=SimpleNamespace(identity=run.result.identity, timing=RunTiming(wall_seconds=0.1)),
+        result=SimpleNamespace(identity=run.result.identity, timing=RunTiming(wall_seconds=0.1), status=run.result.status),
     )
     measurement = _measure(attempt, {"baseline": PriceRate(input_per_1k=0.1, output_per_1k=0.2)})
     assert measurement.llm_calls == 1
