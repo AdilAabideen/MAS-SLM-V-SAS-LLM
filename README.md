@@ -26,7 +26,7 @@ python -m pip install -e .
 mas-slm --help
 ```
 
-The package also builds as a wheel and includes a copyable ESI benchmark fixture. The project has not been published to a package index. [ESI_BENCHMARK.md](ESI_BENCHMARK.md) explains what is preserved and how to materialize bundled assets.
+The package also builds as a wheel and includes a copyable ESI benchmark fixture. The wheel and source archive include the three examples; a wheel installs them under its environment's `share/mas-slm-research/examples/` directory. The project has not been published to a package index. [ESI_BENCHMARK.md](ESI_BENCHMARK.md) explains what is preserved and how to materialize bundled assets.
 
 ## Configure a study
 
