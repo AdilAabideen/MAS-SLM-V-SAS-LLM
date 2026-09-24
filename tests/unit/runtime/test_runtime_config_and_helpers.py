@@ -5,9 +5,10 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
-from app.agentic.AgentRuntime import AgentKernel
-from app.agentic.runtime.failure_taxonomy import FailureCategory
-from app.agentic.runtime.runtime_config import RuntimeConfig
+from mas_slm_research.kernel import AgentKernel
+from mas_slm_research.contracts import FailureKind
+from mas_slm_research.runtime.runtime_config import RuntimeConfig
+from mas_slm_research.workflows.definition import WorkflowDefinition, WorkflowMetadata
 
 
 def _noop_tool() -> dict:
@@ -58,11 +59,11 @@ def test_ut_run_029_runtime_config_rejects_negative_malformed_retry_count():
 
 
 @pytest.mark.unit
-def test_ut_run_030_failure_taxonomy_values_remain_stable():
+def test_ut_run_030_common_failure_kinds_remain_stable():
     """Handle ut run 030 failure taxonomy values remain stable."""
     # Keep the main step clear.
-    assert FailureCategory.UNKNOWN_TOOL.value == "unknown_tool"
-    assert FailureCategory.FINAL_OUTPUT_INVALID.value == "final_output_invalid"
+    assert FailureKind.TOOL.value == "tool"
+    assert FailureKind.VALIDATION.value == "validation"
 
 
 @pytest.mark.unit
@@ -119,11 +120,18 @@ def test_ut_run_037_bind_model_tools_includes_runtime_hints_for_supported_wrappe
     """Handle ut run 037 bind model tools includes runtime hints for supported wrappers."""
     # Keep the main step clear.
     model = _RuntimeHintAwareModel()
+    workflow = WorkflowDefinition(
+        metadata=WorkflowMetadata(workflow_id="demo", name="Demo", version="1"),
+        participating_agents=("demo_agent", "other"),
+        start_agents=("demo_agent",), finalizing_agents=("other",),
+        allowed_handoffs={"demo_agent": ("other",), "other": ()},
+    )
     agent = AgentKernel(
         model=model,
         tools=[_noop_tool],
         agent_node_name="demo_agent",
         handoff_tool_names=["handoff_to_other"],
+        handoff_workflow=workflow,
         runtime_config=RuntimeConfig(multi_agent=True),
     )
     assert model.bound_kwargs == {

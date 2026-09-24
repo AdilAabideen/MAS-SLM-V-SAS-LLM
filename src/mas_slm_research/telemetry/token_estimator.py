@@ -25,11 +25,15 @@ class TokenEstimator:
         *,
         encoding_name: str = DEFAULT_ENCODING,
         chars_per_token_fallback: int = CHARS_PER_TOKEN_FALLBACK,
+        prefer_tiktoken: bool = False,
     ) -> None:
         """Handle the value."""
         # Keep the main step clear.
         self.encoding_name = str(encoding_name or self.DEFAULT_ENCODING)
         self.chars_per_token_fallback = max(1, int(chars_per_token_fallback))
+        # tiktoken may fetch an encoding file on first use. Telemetry must not
+        # turn a clone-based offline run into an implicit network operation.
+        self.prefer_tiktoken = prefer_tiktoken
         self._encoder: Any | None = None
         self._encoder_checked = False
 
@@ -40,13 +44,15 @@ class TokenEstimator:
             return self._encoder
 
         self._encoder_checked = True
-        if tiktoken is None:
+        if not self.prefer_tiktoken or tiktoken is None:
             self._encoder = None
             return None
 
         try:
             self._encoder = tiktoken.get_encoding(self.encoding_name)
-        except (LookupError, ValueError, TypeError):
+        except Exception:
+            # This is an optional estimate. DNS, cache and decoding failures
+            # all fall back to the deterministic character estimate.
             self._encoder = None
         return self._encoder
 
@@ -61,7 +67,7 @@ class TokenEstimator:
         if encoder is not None:
             try:
                 return len(encoder.encode(content))
-            except (ValueError, TypeError):
+            except Exception:
                 pass
 
         return max(1, len(content) // self.chars_per_token_fallback)

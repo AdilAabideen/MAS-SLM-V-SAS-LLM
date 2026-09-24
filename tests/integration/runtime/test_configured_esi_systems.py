@@ -21,7 +21,7 @@ from mas_slm_research.multi_agent import MultiAgentRunner
 from mas_slm_research.registry import ComponentRegistry, register_builtin_components
 from mas_slm_research.telemetry import token_estimator
 from tests.doubles.fake_provider import FakeChatModel
-from tests.regression.test_research_baseline_contracts import PROMPT_DIGESTS, TOOL_CONTRACT_DIGESTS
+from tests.fixtures.esi_contract_digests import PROMPT_DIGESTS, TOOL_CONTRACT_DIGESTS
 
 
 EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "esi" / "experiment.yaml"
@@ -106,9 +106,9 @@ def _offline_token_estimation(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_constructed_prompt_tools_schemas_and_model_mapping_match_esi() -> None:
-    from app.agentic.agents.esi1.prompt import HANDOFF_REQUIREMENTS, SYSTEM_PROMPT
-    from app.agentic.agents.esi1.schema import ES1AgentOutput
-    from app.agentic.agents.single_agent_system.prompt import SYSTEM_PROMPT as BASELINE_PROMPT
+    from mas_slm_research.agents.esi.esi1.prompt import HANDOFF_REQUIREMENTS, SYSTEM_PROMPT
+    from mas_slm_research.agents.esi.esi1.schema import ES1AgentOutput
+    from mas_slm_research.agents.esi.single_agent_system.prompt import SYSTEM_PROMPT as BASELINE_PROMPT
 
     loaded = load_configuration(EXAMPLE, registry=_registry(), environment=ENV)
     observed: list[tuple[str, str]] = []

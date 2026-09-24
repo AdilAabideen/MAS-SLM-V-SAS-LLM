@@ -135,12 +135,6 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         ) if key in report}
 
     fixture_env, model_factory = _load_fixture(args.fixture)
-    if args.fixture is not None:
-        # Scripted demonstrations must stay offline even when tiktoken's
-        # encoding cache is empty (the general fix is tracked as KI-06).
-        from .telemetry import token_estimator
-
-        token_estimator.tiktoken = None
     registry = ComponentRegistry()
     register_builtin_components(registry)
     loaded = load_configuration(args.config, registry=registry, environment=fixture_env or os.environ)

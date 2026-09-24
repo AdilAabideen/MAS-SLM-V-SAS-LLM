@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from app.agentic.protocols.message_normalizer import (
+from mas_slm_research.protocols.message_normalizer import (
     normalize_chat_messages,
     render_ai_message_for_provider,
     render_ai_tool_calls_json,

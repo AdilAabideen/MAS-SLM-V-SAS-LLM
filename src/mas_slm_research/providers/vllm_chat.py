@@ -14,7 +14,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
-from pydantic import ConfigDict, Field
+from pydantic import Field
 
 from mas_slm_research.protocols import (
     AllowedToolNames,
@@ -83,8 +83,6 @@ class VLLMChat(BaseChatModel):
     - Llama CPP function calling is not available; `bind_tools()` is emulated
       through a JSON tool-call contract so LangGraph agents can run tool loops.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     model: str = Field(description="Llama server model id (e.g. 'medgemma-4b-it').")
     base_url: str = Field(

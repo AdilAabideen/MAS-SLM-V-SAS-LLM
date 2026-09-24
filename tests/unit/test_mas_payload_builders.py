@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.agentic.payload_builder import build_pending_agent_payload
-from app.agentic.workflows.definitions.esi_mas.payload_builders import (
+from mas_slm_research.workflows.esi.payload_builder import build_pending_agent_payload
+from mas_slm_research.workflows.esi.payloads.common import (
     left_side_payload,
     right_side_payload,
     unified_payload_builder,

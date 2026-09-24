@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from app.agentic.runtime.short_term_memory import ShortTermMemory, ShortTermMemoryConfig
+from mas_slm_research.runtime.short_term_memory import ShortTermMemory, ShortTermMemoryConfig
 
 
 @pytest.mark.unit

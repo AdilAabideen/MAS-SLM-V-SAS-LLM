@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.agentic.agents.single_agent_system.evaluator import SingleAgentAcuityEvaluator as LegacyESI
-from app.agentic.agents.esi1.evaluator import ES1AcuityEvaluator
-from app.agentic.agents.doctor.evaluator import DoctorAlwaysPassEvaluator
+from mas_slm_research.evaluation.legacy_single_agent_acuity import SingleAgentAcuityEvaluator as LegacyESI
+from mas_slm_research.evaluation.legacy_esi1 import ES1AcuityEvaluator
+from mas_slm_research.evaluation.legacy_doctor import DoctorAlwaysPassEvaluator
 from mas_slm_research.contracts import (
     CaseResult, FailureKind, RunFailure, RunIdentity, RunStatus, RunTiming, ValidatedOutput,
 )

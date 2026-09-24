@@ -10,8 +10,6 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import HumanMessage
 
-from app.agentic.models.medgemma_medical_chat import MedGemmaMedicalChatModel as LegacyDr7
-from app.agentic.models.vllm_chat import VLLMChat as LegacyVLLM
 from mas_slm_research.model_registry import ProviderSettings, build_registered_model
 from mas_slm_research.providers.medgemma_medical_chat import MedGemmaMedicalChatModel
 from mas_slm_research.providers.vllm_chat import VLLMChat
@@ -47,7 +45,7 @@ class RecordingClient:
 
 @pytest.mark.unit
 @pytest.mark.parametrize("provider", ["dr7", "vllm"])
-def test_extracted_provider_request_and_parse_match_baseline(provider, monkeypatch, load_json_fixture):
+def test_registered_provider_request_and_parse(provider, monkeypatch, load_json_fixture):
     response = FakeResponse(load_json_fixture(f"provider_payloads/{'dr7' if provider == 'dr7' else 'llama'}_native_tool_calls.json"))
     recorded = []
     import httpx
@@ -56,41 +54,27 @@ def test_extracted_provider_request_and_parse_match_baseline(provider, monkeypat
     if provider == "dr7":
         connection = ProviderSettings(dr7_base_url="https://dr7.test", dr7_api_key="private-key")
         extracted = build_registered_model("medgemma-4b-it", connection)
-        baseline = LegacyDr7(
-            model="medgemma-4b-it", base_url="https://dr7.test", api_key="private-key",
-            temperature=0, max_tokens=4096,
-        )
         assert isinstance(extracted, MedGemmaMedicalChatModel)
         arguments = {}
     else:
         connection = ProviderSettings(vllm_base_url="https://llama.test/v1", vllm_api_key="private-key")
         extracted = build_registered_model("medgemma-4b-it-Finetuned", connection)
-        baseline = LegacyVLLM(
-            model="medgemma-tool", base_url="https://llama.test/v1", api_key="private-key",
-            agent_model_id_overrides={
-                "esi1_agent": "esi1-agent-075", "esi2_agent": "esi2-agent-025",
-                "esi345_agent": "esi3-agent-075", "vitals_agent": "medgemma-4b-it",
-                "doctor_agent": "medgemma-4b-it",
-            },
-            temperature=0, max_tokens=4096,
-        )
         assert isinstance(extracted, VLLMChat)
         arguments = {"agent_name": "esi2_agent"}
 
     tools = [{"function": {"name": "lookup_value", "description": "Lookup", "parameters": {}}}]
-    legacy_output = baseline._generate([HumanMessage(content="case")], tools=tools, tool_choice="any", **arguments)
     extracted_output = extracted._generate([HumanMessage(content="case")], tools=tools, tool_choice="any", **arguments)
 
-    assert legacy_output.generations[0].message.tool_calls == extracted_output.generations[0].message.tool_calls
-    assert recorded[0] == recorded[1]
-    assert recorded[1]["body"]["messages"][0]["content"].startswith("<tool_rules>")
-    assert "private-key" not in json.dumps(recorded[1]["body"])
-    assert recorded[1]["headers"]["Authorization"] == "Bearer private-key"
+    assert extracted_output.generations[0].message.tool_calls
+    assert len(recorded) == 1
+    assert recorded[0]["body"]["messages"][0]["content"].startswith("<tool_rules>")
+    assert "private-key" not in json.dumps(recorded[0]["body"])
+    assert recorded[0]["headers"]["Authorization"] == "Bearer private-key"
     assert "private-key" not in repr(connection)
     if provider == "vllm":
-        assert recorded[1]["body"]["model"] == "esi2-agent-025"
-        assert recorded[1]["body"]["max_tokens"] == 250
-        assert recorded[1]["body"]["temperature"] == 0
+        assert recorded[0]["body"]["model"] == "esi2-agent-025"
+        assert recorded[0]["body"]["max_tokens"] == 250
+        assert recorded[0]["body"]["temperature"] == 0
 
 
 @pytest.mark.unit

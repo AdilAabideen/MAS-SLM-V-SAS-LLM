@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from app.agentic.runtime.finalization_policy import FinalizationPolicy
-from app.agentic.runtime.runtime_config import RuntimeConfig
+from mas_slm_research.runtime.finalization_policy import FinalizationPolicy
+from mas_slm_research.runtime.runtime_config import RuntimeConfig
 
 
 @pytest.mark.unit

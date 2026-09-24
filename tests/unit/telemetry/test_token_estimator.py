@@ -5,7 +5,31 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from app.agentic.telemetry.token_estimator import TokenEstimator
+from mas_slm_research.telemetry.token_estimator import TokenEstimator
+
+
+def test_offline_default_never_initializes_a_downloadable_encoding(monkeypatch):
+    from mas_slm_research.telemetry import token_estimator
+
+    class DownloadingTokenizer:
+        def get_encoding(self, name):
+            raise AssertionError("tokenizer network path was entered")
+
+    monkeypatch.setattr(token_estimator, "tiktoken", DownloadingTokenizer())
+    assert TokenEstimator().estimate_text_tokens("abcdefgh") == 2
+
+
+def test_opted_in_tokenizer_failure_falls_back_to_characters(monkeypatch):
+    from mas_slm_research.telemetry import token_estimator
+
+    class UnavailableTokenizer:
+        def get_encoding(self, name):
+            raise ConnectionError("offline encoding cache")
+
+    monkeypatch.setattr(token_estimator, "tiktoken", UnavailableTokenizer())
+    estimator = TokenEstimator(prefer_tiktoken=True)
+    assert estimator.estimate_text_tokens("abcdefgh") == 2
+    assert estimator.estimate_text_tokens("abcd") == 1
 
 
 @pytest.mark.unit

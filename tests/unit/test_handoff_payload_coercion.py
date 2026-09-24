@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.agentic.agents.esi1.handoffs import ESI1ToDoctorPayload, ESI1ToESI2Payload
-from app.agentic.agents.esi2.handoffs import ESI2ToDoctorPayload, ESI2ToESI345Payload
-from app.agentic.agents.esi345.handoffs import ESI345ToDoctorPayload
-from app.agentic.agents.vitals.handoffs import VitalsToDoctorPayload
+from mas_slm_research.agents.esi.esi1.handoffs import ESI1ToDoctorPayload, ESI1ToESI2Payload
+from mas_slm_research.agents.esi.esi2.handoffs import ESI2ToDoctorPayload, ESI2ToESI345Payload
+from mas_slm_research.agents.esi.esi345.handoffs import ESI345ToDoctorPayload
+from mas_slm_research.agents.esi.vitals.handoffs import VitalsToDoctorPayload
 
 
 @pytest.mark.unit
