@@ -1,6 +1,6 @@
 """Schema module helpers."""
 
-from pydantic import BaseModel, Field, AliasChoices
+from pydantic import BaseModel, Field, AliasChoices, model_validator
 from typing import List, Literal, Optional, Any, Union
 
 
@@ -106,3 +106,16 @@ class SingleAgentOutput(BaseModel):
         default_factory=list,
         description="Immediate triage-facing next actions or workflow suggestions."
     )
+
+
+class SingleAgentOutputV2(SingleAgentOutput):
+    """Accept an irrelevant null resource list on early ESI pathways."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def empty_resources_for_early_decision(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("predicted_resources") is None and value.get("decision_source") in {
+            "esi1_decision_point_a", "esi2_decision_point_b",
+        }:
+            return {**value, "predicted_resources": []}
+        return value

@@ -51,11 +51,12 @@ class MultiCaseExecution:
 class _KernelRoleStrategy:
     mode = "kernel"
 
-    def __init__(self, *, workflow: WorkflowDefinition, roles: Mapping[str, AgentKernel], timeline: list[dict[str, Any]], max_handoffs: int | None = None) -> None:
+    def __init__(self, *, workflow: WorkflowDefinition, roles: Mapping[str, AgentKernel], timeline: list[dict[str, Any]], max_handoffs: int | None = None, on_event: Callable[[str, dict[str, Any]], None] | None = None) -> None:
         self.workflow = workflow
         self.roles = roles
         self.child_traces: dict[str, _ChildTrace] = {}
         self.timeline = timeline
+        self.on_event = on_event
         self.max_handoffs = max_handoffs
         self.handoffs_used = 0
 
@@ -72,14 +73,20 @@ class _KernelRoleStrategy:
         def record_event(event: dict[str, Any]) -> None:
             trace.events.append(event)
             self.timeline.append({"source": "agent_event", "event": event})
+            if self.on_event is not None:
+                self.on_event("agent_event", event)
 
         def record_llm(call: dict[str, Any]) -> None:
             trace.llm_calls.append(call)
             self.timeline.append({"source": "model_call", "event": call})
+            if self.on_event is not None:
+                self.on_event("model_call", call)
 
         def record_tool(call: dict[str, Any]) -> None:
             trace.tool_calls.append(call)
             self.timeline.append({"source": "tool_measurement", "event": call})
+            if self.on_event is not None:
+                self.on_event("tool_measurement", call)
 
         kernel.add_event_handler(record_event)
         kernel.add_llm_call_handler(record_llm)
@@ -141,12 +148,17 @@ class MultiAgentRunner:
         self.max_handoffs = max_handoffs
         self.max_elapsed_seconds = max_elapsed_seconds
 
-    async def run_case(self, *, identity: RunIdentity, case_info: Mapping[str, Any]) -> MultiCaseExecution:
+    async def run_case(
+        self, *, identity: RunIdentity, case_info: Mapping[str, Any],
+        on_event: Callable[[str, dict[str, Any]], None] | None = None,
+    ) -> MultiCaseExecution:
         started = time.perf_counter()
         timeline: list[dict[str, Any]] = []
 
         def record_graph_event(event: dict[str, Any]) -> None:
             timeline.append({"source": "graph_event", "event": event})
+            if on_event is not None:
+                on_event("graph_event", event)
             if self.event_sink is not None:
                 self.event_sink(event)
 
@@ -164,7 +176,7 @@ class MultiAgentRunner:
                     raise TypeError(f"role '{name}' factory must return an extracted AgentKernel")
                 if not kernel.runtime_config.persist_events:
                     raise ValueError(f"role '{name}' must emit in-memory measurements")
-            strategy = _KernelRoleStrategy(workflow=self.workflow, roles=roles, timeline=timeline, max_handoffs=self.max_handoffs)
+            strategy = _KernelRoleStrategy(workflow=self.workflow, roles=roles, timeline=timeline, max_handoffs=self.max_handoffs, on_event=on_event)
             graph = MASGraphBuilder(
                 workflow=self.workflow,
                 agent_executor=AgentNodeExecutor(

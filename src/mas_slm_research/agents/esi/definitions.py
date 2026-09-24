@@ -31,7 +31,7 @@ from .esi345.prompt import SINGLE_AGENT_OUTPUT_REQUIREMENTS as ESI345_SINGLE_PRO
 from .esi345.prompt import SYSTEM_PROMPT as ESI345_PROMPT
 from .esi345.schema import ES345AgentInput, ES345AgentOutput
 from .single_agent_system.prompt import SYSTEM_PROMPT as BASELINE_PROMPT
-from .single_agent_system.schema import SingleAgentInput, SingleAgentOutput
+from .single_agent_system.schema import SingleAgentInput, SingleAgentOutput, SingleAgentOutputV2
 from .vitals.handoffs import HANDOFFS as VITALS_HANDOFFS
 from .vitals.prompt import HANDOFF_REQUIREMENTS as VITALS_HANDOFF_PROMPT
 from .vitals.prompt import SINGLE_AGENT_OUTPUT_REQUIREMENTS as VITALS_SINGLE_PROMPT
@@ -120,6 +120,14 @@ ESI_AGENTS: dict[str, ESIAgentDefinition] = {
         input_schema=SingleAgentInput, output_schema=SingleAgentOutput,
         tool_ids=VITALS_TOOLS,
     ),
+    "esi.single_agent_v2": ESIAgentDefinition(
+        name="single_agent",
+        system_prompt=BASELINE_PROMPT + "\n\nFor ESI-1 and ESI-2 final_answer calls, "
+        "predicted_resources must be [] (never null); num_resources may be null. "
+        "Resource prediction is only relevant on the ESI-3/4/5 pathway.",
+        input_schema=SingleAgentInput, output_schema=SingleAgentOutputV2,
+        tool_ids=VITALS_TOOLS,
+    ),
     "esi.esi1_v1": ESIAgentDefinition(
         name="esi1_agent", system_prompt=ESI1_PROMPT,
         input_schema=ES1AgentInput, output_schema=ES1AgentOutput,
@@ -155,6 +163,7 @@ ESI_AGENTS: dict[str, ESIAgentDefinition] = {
 ESI_SCHEMAS: dict[str, type[BaseModel]] = {
     "esi.single_agent_input_v1": SingleAgentInput,
     "esi.single_agent_output_v1": SingleAgentOutput,
+    "esi.single_agent_output_v2": SingleAgentOutputV2,
     "esi.esi1_agent_input_v1": ES1AgentInput,
     "esi.esi1_agent_output_v1": ES1AgentOutput,
     "esi.esi2_agent_input_v1": ES2AgentInput,

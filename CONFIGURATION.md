@@ -33,6 +33,11 @@ when explicitly set in YAML, so an old Azure catalog entry sharing the model
 ID cannot silently supply generation settings. `max_tokens` is forwarded to
 Azure when selected there. See `examples/esi/experiment-dr7.yaml` for an
 OpenAI SAS / DR7 MAS configuration.
+That example selects `esi.single_agent_v2`: it makes the early ESI-1/2
+resource-list instruction explicit and accepts `predicted_resources: null` as
+an empty list only on those early pathways. The preserved
+`esi.single_agent_v1` prompt and strict output schema remain unchanged for
+historical comparisons.
 Provider call records include the actual checkpoint and decoding parameters.
 Provider-reported tokens are separated from estimates; retrying requests are
 counted, while their unreported token/cost totals stay unknown.

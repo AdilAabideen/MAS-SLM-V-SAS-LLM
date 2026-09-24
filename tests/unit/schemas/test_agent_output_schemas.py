@@ -11,6 +11,22 @@ from mas_slm_research.agents.esi.esi1.schema import ES1AgentInput, ES1AgentOutpu
 from mas_slm_research.agents.esi.esi2.schema import ES2AgentInput, ES2AgentOutput
 from mas_slm_research.agents.esi.esi345.schema import ES345AgentInput, ES345AgentOutput
 from mas_slm_research.agents.esi.vitals.schema import VitalsAgentOutput
+from mas_slm_research.agents.esi.single_agent_system.schema import SingleAgentOutput, SingleAgentOutputV2
+
+
+def test_early_esi_decision_accepts_null_resources_but_resource_route_does_not() -> None:
+    payload = {
+        "final_esi_level": 1, "confidence": 1.0,
+        "decision_source": "esi1_decision_point_a", "uptriaged": False,
+        "abnormal_vitals_considered": False, "vitals_summary": "Critical vitals",
+        "case_summary": "Synthetic case", "rationale": "Immediate intervention",
+        "predicted_resources": None,
+    }
+    with pytest.raises(ValidationError):
+        SingleAgentOutput.model_validate(payload)
+    assert SingleAgentOutputV2.model_validate(payload).predicted_resources == []
+    with pytest.raises(ValidationError):
+        SingleAgentOutputV2.model_validate({**payload, "decision_source": "esi345_resource_prediction"})
 
 
 @pytest.mark.unit
@@ -78,4 +94,3 @@ def test_ut_sch_006_esi1_input_accepts_alias_fields():
         {"gender": "m", "race": "x", "arrival": "walk", "pain": "1", "chief complaint": "pain", "age": 20, "triage case": "case"}
     )
     assert payload.arrival_transport == "walk"
-

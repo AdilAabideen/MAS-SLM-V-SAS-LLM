@@ -51,7 +51,10 @@ class SingleAgentRunner:
         self.agent_name = agent_name
         self.output_validator = output_validator
 
-    async def run_case(self, *, identity: RunIdentity, payload: Any) -> SingleCaseExecution:
+    async def run_case(
+        self, *, identity: RunIdentity, payload: Any,
+        on_event: Callable[[str, dict[str, Any]], None] | None = None,
+    ) -> SingleCaseExecution:
         events: list[dict[str, Any]] = []
         llm_calls: list[dict[str, Any]] = []
         tool_calls: list[dict[str, Any]] = []
@@ -66,7 +69,12 @@ class SingleAgentRunner:
             if not kernel.runtime_config.persist_events:
                 raise ValueError("kernel must emit in-memory measurements; use no external reporting sink")
             kernel.set_event_context(run_id=identity.run_id, agent_name=self.agent_name)
-            kernel.add_event_handler(events.append)
+            def record_event(event: dict[str, Any]) -> None:
+                events.append(event)
+                if on_event is not None:
+                    on_event("agent_event", event)
+
+            kernel.add_event_handler(record_event)
             kernel.add_llm_call_handler(llm_calls.append)
             kernel.add_tool_call_handler(tool_calls.append)
             if kernel.runtime_config.max_elapsed_seconds is None:

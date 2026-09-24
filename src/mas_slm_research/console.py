@@ -41,6 +41,8 @@ class ConsoleRenderer:
         self.mode = mode
         self.stream = stream if stream is not None else sys.stderr
         self.width = width or shutil.get_terminal_size((100, 24)).columns
+        self._handoff_targets: dict[str, str] = {}
+        self._agent_names: dict[str, str] = {}
         self.use_color = "NO_COLOR" not in os.environ and (
             color == "always" or color == "auto" and bool(getattr(self.stream, "isatty", lambda: False)())
         )
@@ -52,9 +54,9 @@ class ConsoleRenderer:
                                 break_long_words=False, break_on_hyphens=False) or [""]
         for line in wrapped:
             if self.use_color and color:
-                print(f"\x1b[{color}m{line}\x1b[0m", file=self.stream)
+                print(f"\x1b[{color}m{line}\x1b[0m", file=self.stream, flush=True)
             else:
-                print(line, file=self.stream)
+                print(line, file=self.stream, flush=True)
 
     def _payload(self, value: Any) -> str:
         return json.dumps(_safe(value), ensure_ascii=False, sort_keys=True, default=str)
@@ -103,7 +105,7 @@ class ConsoleRenderer:
     ) -> None:
         if self.mode == "none":
             return
-        self._line(f"[{system_id}] case={case_id} repetition={repetition}", color="1;34")
+        self.start_case(system_id=system_id, case_id=case_id, repetition=repetition)
         if self.mode in {"events", "full"} and execution is not None:
             if isinstance(execution, MultiCaseExecution):
                 timeline = execution.timeline or tuple({"source": "graph_event", "event": event} for event in execution.events)
@@ -116,8 +118,36 @@ class ConsoleRenderer:
             for item in timeline:
                 event = item.get("event")
                 if isinstance(event, Mapping):
-                    self._event(str(item.get("source") or "event"), event,
-                                handoff_targets=handoff_targets, agent_names=agent_names)
+                    self.render_event(str(item.get("source") or "event"), event,
+                                      handoff_targets=handoff_targets, agent_names=agent_names)
+        self.finish_case(grade)
+
+    def start_case(self, *, system_id: str, case_id: str, repetition: int) -> None:
+        self._handoff_targets.clear()
+        self._agent_names.clear()
+        self._line(f"[{system_id}] case={case_id} repetition={repetition}", color="1;34")
+
+    def render_event(
+        self, source: str, event: Mapping[str, Any], *,
+        handoff_targets: Mapping[str, str] | None = None,
+        agent_names: Mapping[str, str] | None = None,
+    ) -> None:
+        if self.mode in {"events", "full"}:
+            run_id = event.get("agent_run_id")
+            agent_name = event.get("agent_name")
+            if run_id and agent_name:
+                self._agent_names[str(run_id)] = str(agent_name)
+            handoff_id = event.get("handoff_id")
+            payload = event.get("payload_json")
+            if handoff_id and isinstance(payload, Mapping) and payload.get("target_agent"):
+                self._handoff_targets[str(handoff_id)] = str(payload["target_agent"])
+            self._event(
+                source, event,
+                handoff_targets={**self._handoff_targets, **(handoff_targets or {})},
+                agent_names={**self._agent_names, **(agent_names or {})},
+            )
+
+    def finish_case(self, grade: GradeResult) -> None:
         color = "32" if grade.passed else "31" if grade.passed is False else "33"
         self._line(f"  final: {grade.status.value} passed={grade.passed} score={grade.score}", color=color)
 
