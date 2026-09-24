@@ -8,6 +8,7 @@ from typing import Any, AsyncGenerator, Mapping
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
 from .finalization_policy import FinalizationPolicy
+from .budget import BudgetExceeded
 from .handoff_policy import HandoffPolicy
 from .runtime_config import RuntimeConfig
 from .short_term_memory import ShortTermMemory, ShortTermMemoryConfig
@@ -289,10 +290,18 @@ class AgentRunner:
         handoff_output: Any = None
         done = False
         iteration = 0
+        tool_calls_used = 0
         malformed_tool_retry_counts: dict[str, int] = {}
         pending_retry_feedback: HumanMessage | None = None
 
         while not done:
+            if self.runtime_config.max_model_calls is not None and iteration >= self.runtime_config.max_model_calls:
+                self.emit_event(
+                    event_type="runtime_decision", node_name=self.agent_node_name,
+                    payload_json={"decision": "model_call_budget_exceeded", "used": iteration,
+                                  "limit": self.runtime_config.max_model_calls},
+                )
+                raise BudgetExceeded(counter="model_calls", used=iteration, limit=self.runtime_config.max_model_calls)
             iteration += 1
 
             call_messages = self._build_call_messages(
@@ -300,10 +309,11 @@ class AgentRunner:
                 short_term_memory=short_term_memory,
                 retry_feedback=pending_retry_feedback,
             )
+            call_kind = "malformed_repair" if pending_retry_feedback is not None else "main_loop"
             pending_retry_feedback = None
 
             ai_msg = await self.ainvoke_with_telemetry(
-                call_kind="main_loop",
+                call_kind=call_kind,
                 iteration=iteration,
                 messages=call_messages,
                 invoke_fn=lambda: self.bound_model.ainvoke(call_messages),
@@ -317,6 +327,19 @@ class AgentRunner:
                     extra_additional_kwargs={"raw_tool_text": str(ai_msg.content or "")},
                 )
             ai_msg, tool_calls = self._apply_tool_call_limit(ai_msg=ai_msg, tool_calls=tool_calls)
+            if self.runtime_config.max_tool_calls_total is not None and (
+                tool_calls_used + len(tool_calls) > self.runtime_config.max_tool_calls_total
+            ):
+                self.emit_event(
+                    event_type="runtime_decision", node_name=self.agent_node_name,
+                    payload_json={"decision": "tool_call_budget_exceeded", "used": tool_calls_used,
+                                  "requested": len(tool_calls), "limit": self.runtime_config.max_tool_calls_total},
+                )
+                raise BudgetExceeded(
+                    counter="tool_calls", used=tool_calls_used + len(tool_calls),
+                    limit=self.runtime_config.max_tool_calls_total,
+                )
+            tool_calls_used += len(tool_calls)
 
             streamed_messages.append(ai_msg)
             if tool_calls:

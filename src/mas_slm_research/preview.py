@@ -43,7 +43,7 @@ def _catalog_spec(loaded: LoadedConfiguration, model: ResolvedModel) -> ModelSpe
 
 def _model_view(loaded: LoadedConfiguration, model: ResolvedModel, role: str) -> dict[str, Any]:
     catalog = _catalog_spec(loaded, model)
-    if catalog is None and model.provider in {"openai", "dr7", "vllm"}:
+    if catalog is None and model.provider in {"openai", "azure_openai", "dr7", "vllm"}:
         catalog = ModelSpec(id=model.model_id, provider=model.provider)
     base_provider_id = catalog.provider_model_id if catalog and catalog.provider_model_id else model.model_id
     provider_id = base_provider_id
@@ -56,22 +56,24 @@ def _model_view(loaded: LoadedConfiguration, model: ResolvedModel, role: str) ->
         catalog.max_tokens if catalog else None
     )
     if model.provider == "vllm":
-        actual_decoding: dict[str, Any] | None = {
-            "temperature": 0, "max_tokens": 250 if max_tokens is not None else None,
-            "top_k": 1, "top_p": 1, "seed": 42,
-            "policy": "legacy_vllm_request_v1",
-        }
+        actual_decoding: dict[str, Any] | None = (
+            {"temperature": 0, "max_tokens": 250 if max_tokens is not None else None,
+             "top_k": 1, "top_p": 1, "seed": 42, "policy": "legacy_vllm_request_v1"}
+            if model.request_policy == "legacy_v1"
+            else {"temperature": temperature, "max_tokens": max_tokens, "policy": "configured_v2"}
+        )
     elif model.provider == "dr7":
         actual_decoding = {"temperature": temperature, "max_tokens": max_tokens}
-    elif model.provider == "openai":
-        actual_decoding = {"temperature": temperature, "max_tokens": None,
-                           "policy": "legacy_azure_adapter_v1"}
+    elif model.provider in {"openai", "azure_openai"}:
+        actual_decoding = {"temperature": temperature, "max_tokens": max_tokens,
+                           "policy": model.request_policy}
     else:
         actual_decoding = None
     return {
         "configuration_model": model.name,
         "provider": model.provider,
         "model_id": model.model_id,
+        "request_policy": model.request_policy,
         "provider_model_id": provider_id,
         "catalog": model.catalog,
         "model_env": model.model_env,
@@ -149,6 +151,9 @@ def inspect_configuration(loaded: LoadedConfiguration) -> ConfigurationPreview:
             }
         return {
             "workflow_id": systems.workflow.metadata.workflow_id,
+            "runtime_profile": spec.runtime_profile,
+            "max_handoffs": systems.mas_runner.max_handoffs,
+            "max_elapsed_seconds": systems.mas_runner.max_elapsed_seconds,
             "workflow_version": systems.workflow.metadata.version,
             "selected_definition": loaded.workflow_file.definition,
             "start_agents": list(systems.workflow.start_agents),
@@ -172,6 +177,7 @@ def inspect_configuration(loaded: LoadedConfiguration) -> ConfigurationPreview:
     common = {
         "version": spec.version,
         "name": spec.name,
+        "runtime_profile": spec.runtime_profile,
         "paths": {
             "experiment": str(loaded.experiment_path),
             "workflow": str(loaded.workflow_path),

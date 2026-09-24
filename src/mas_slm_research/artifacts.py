@@ -26,7 +26,7 @@ from .grading import GradeResult, GradeStatus
 from .multi_agent import MultiCaseExecution
 
 
-ARTIFACT_VERSION = 1
+ARTIFACT_VERSION = 2
 _SENSITIVE_KEYS = ("api_key", "password", "secret", "authorization", "access_token", "refresh_token")
 
 
@@ -86,8 +86,11 @@ def _package_version(root: Path) -> str | None:
 
 def _call_facts(call: Mapping[str, Any]) -> dict[str, Any]:
     return {key: call.get(key) for key in (
-        "run_id", "agent_name", "call_index", "tool_call_id", "tool_name", "status",
+        "run_id", "agent_name", "call_index", "call_kind", "tool_call_parse_source",
+        "tool_call_id", "tool_name", "status",
         "input_tokens", "output_tokens", "tokens_total", "usage_source",
+        "provider_model_id", "request_parameters", "network_attempts",
+        "input_token_source", "output_token_source",
         "text_recovered_tool_call_count", "latency_ms",
     ) if key in call}
 
@@ -173,6 +176,8 @@ class ArtifactWriter:
             "artifact_version": ARTIFACT_VERSION,
             "state": "in_progress", "experiment_id": experiment_id,
             "experiment_name": loaded.experiment.name,
+            "runtime_profile": loaded.experiment.runtime_profile,
+            "grader_id": loaded.experiment.grader,
             "schedule": loaded.experiment.schedule,
             "repetitions": loaded.experiment.repetitions,
             "started_at": datetime.now(timezone.utc).isoformat(), "ended_at": None,
@@ -298,7 +303,7 @@ def _read_manifest(directory: Path, *, verify_derived: bool = False) -> dict[str
         manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ArtifactError(f"{directory}: invalid manifest: {exc}") from exc
-    if not isinstance(manifest, dict) or manifest.get("artifact_version") != ARTIFACT_VERSION:
+    if not isinstance(manifest, dict) or manifest.get("artifact_version") not in {1, ARTIFACT_VERSION}:
         raise ArtifactError(f"{directory}: unsupported artifact version")
     hashes = manifest.get("hashes")
     if not isinstance(hashes, dict):
@@ -366,6 +371,8 @@ def summarize_artifacts(directory: Path, *, verify_derived: bool = False) -> Com
         schedule=manifest["schedule"], dataset_path=manifest["dataset_path"],
         started_at=manifest["started_at"], ended_at=manifest["ended_at"] or manifest["started_at"],
         attempts=tuple(attempts), pairs=pairs,
+        runtime_profile=manifest.get("runtime_profile", "legacy_v1"),
+        grader_id=manifest.get("grader_id"),
     )
     prices = {role: PriceRate(**rate) for role, rate in manifest["prices_by_role"].items()}
     report = compare_experiment(

@@ -35,6 +35,7 @@ class _StrictSpec(BaseModel):
 
 class ModelConfig(_StrictSpec):
     provider: str = Field(min_length=1)
+    request_policy: Literal["legacy_v1", "configured_v2"] = "configured_v2"
     model_env: str | None = None
     model_id: str | None = None
     catalog: str | None = None
@@ -59,6 +60,9 @@ class RuntimePolicyConfig(_StrictSpec):
     max_malformed_tool_retries_per_tool: int | None = Field(default=None, ge=0)
     allow_plain_json_final_output: bool | None = None
     drop_extra_tool_calls: bool | None = None
+    max_model_calls: int | None = Field(default=None, ge=1)
+    max_tool_calls_total: int | None = Field(default=None, ge=1)
+    max_elapsed_seconds: float | None = Field(default=None, gt=0)
 
 
 class AgentConfig(_StrictSpec):
@@ -77,6 +81,8 @@ class MASConfig(_StrictSpec):
     agents: dict[str, str] = Field(min_length=1)
     model_overrides: dict[str, str] = Field(default_factory=dict)
     workflow: str = Field(min_length=1)
+    max_handoffs: int | None = Field(default=None, ge=1)
+    max_elapsed_seconds: float | None = Field(default=None, gt=0)
 
 
 class DatasetConfig(_StrictSpec):
@@ -106,6 +112,7 @@ class TelemetryConfig(_StrictSpec):
 class ExperimentSpec(_StrictSpec):
     version: Literal[1]
     name: str = Field(min_length=1)
+    runtime_profile: Literal["legacy_v1", "strict_v1", "slm_assisted_v1"] = "legacy_v1"
     extensions: tuple[str, ...] = ()
     models: dict[str, ModelConfig] = Field(min_length=1)
     agents: dict[str, AgentConfig] = Field(min_length=1)
@@ -181,6 +188,7 @@ class ResolvedModel:
     api_version_env: str | None
     temperature: float | None
     max_tokens: int | None
+    request_policy: str = "configured_v2"
 
 
 @dataclass(frozen=True)
@@ -452,7 +460,8 @@ def load_configuration(
         catalog_spec = None
         if model.catalog:
             catalog_spec = _require_registered(registry, "models", model.catalog, path, f"models.{name}.catalog")
-            if getattr(catalog_spec, "provider", model.provider) != model.provider:
+            catalog_provider = getattr(catalog_spec, "provider", model.provider)
+            if catalog_provider != model.provider and {catalog_provider, model.provider} != {"openai", "azure_openai"}:
                 raise ConfigurationError(f"{path}: models.{name}.catalog: provider conflicts with catalog")
         model_id = (
             _env_value(model.model_env, env, path, f"models.{name}.model_env")
@@ -473,6 +482,7 @@ def load_configuration(
             api_key_env=model.api_key_env, base_url_env=model.base_url_env,
             api_version_env=model.api_version_env,
             temperature=model.temperature, max_tokens=model.max_tokens,
+            request_policy=model.request_policy,
         )
     return LoadedConfiguration(
         experiment_path=path,

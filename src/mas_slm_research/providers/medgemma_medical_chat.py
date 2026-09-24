@@ -120,7 +120,7 @@ class MedGemmaMedicalChatModel(BaseChatModel):
         url: str,
         headers: dict[str, str],
         payload: dict[str, Any],
-    ) -> httpx.Response:
+    ) -> tuple[httpx.Response, int]:
         """Handle with rate limit retry."""
         # Keep the main step clear.
         max_retries = max(0, int(self.rate_limit_max_retries))
@@ -129,7 +129,7 @@ class MedGemmaMedicalChatModel(BaseChatModel):
             while True:
                 resp = client.post(url, headers=headers, json=payload)
                 if resp.status_code != 429 or attempt_index >= max_retries:
-                    return resp
+                    return resp, attempt_index + 1
 
                 delay_s = self._compute_rate_limit_backoff_s(
                     attempt_index,
@@ -190,7 +190,7 @@ class MedGemmaMedicalChatModel(BaseChatModel):
         }
 
         try:
-            resp = self._post_with_rate_limit_retry(
+            resp, network_attempts = self._post_with_rate_limit_retry(
                 url=url,
                 headers=headers,
                 payload=payload,
@@ -202,7 +202,9 @@ class MedGemmaMedicalChatModel(BaseChatModel):
             detail = (resp.text or "").strip()
             if len(detail) > 5000:
                 detail = detail[:5000] + "…(truncated)"
-            raise RuntimeError(f"Dr7 API error {resp.status_code}: {detail}")
+            error = RuntimeError(f"Dr7 API error {resp.status_code}: {detail}")
+            error.network_attempts = network_attempts
+            raise error
 
         try:
             data = resp.json()
@@ -228,6 +230,13 @@ class MedGemmaMedicalChatModel(BaseChatModel):
                 allowed_tool_names=allowed_tool_names,
             )
 
-        message = AIMessage(content=content, tool_calls=tool_calls)
+        response_metadata = {
+            "provider_model_id": self.model,
+            "request_parameters": {key: payload[key] for key in ("temperature", "max_tokens") if key in payload},
+            "network_attempts": network_attempts,
+        }
+        if isinstance(data.get("usage"), dict):
+            response_metadata["token_usage"] = data["usage"]
+        message = AIMessage(content=content, tool_calls=tool_calls, response_metadata=response_metadata)
         generation = ChatGeneration(message=message)
         return ChatResult(generations=[generation], llm_output={"raw": data})

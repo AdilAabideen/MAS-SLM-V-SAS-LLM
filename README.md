@@ -42,4 +42,6 @@ The console renderer has `none`, `summary`, `events`, and `full` modes and `auto
 
 Tracing is off by default. `--trace` enables the configured in-memory span tree or optional OTLP HTTP export; `--no-trace` disables it. For OTLP, install the optional `otel` extra and name endpoint/header environment variables in YAML. [TRACING.md](TRACING.md) gives the exporter configuration and limits.
 
+Named runtime policies (`legacy_v1`, `strict_v1`, and `slm_assisted_v1`) make recovery behavior and finite budgets explicit. Reports distinguish clean first-pass completions from repaired completions and record their extra model work. [POLICIES.md](POLICIES.md) describes profile settings and model-size controls.
+
 The retired FastAPI/SQLite application has been removed. The research CLI runs directly from the extracted package without a server or database. Historical ESI prompts, tool ordering, routes, and scoring have preservation tests; corrected policies use new versioned registrations so old and new experiment results remain distinguishable. Token telemetry uses a deterministic character estimate by default, including offline runs. Call `TokenEstimator(prefer_tiktoken=True)` to opt into a locally available tokenizer; if it cannot load, estimation falls back to characters.

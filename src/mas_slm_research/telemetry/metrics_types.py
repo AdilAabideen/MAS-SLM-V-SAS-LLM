@@ -18,8 +18,8 @@ class LLMCallMetric:
     ended_at: datetime
     latency_ms: int
     input_tokens: int
-    output_tokens: int
-    tokens_total: int
+    output_tokens: int | None
+    tokens_total: int | None
     usage_source: str
     had_tool_calls: bool
     tool_call_count: int
@@ -28,6 +28,11 @@ class LLMCallMetric:
     native_tool_call_count: int = 0
     tool_names: list[str] = field(default_factory=list)
     error_text: str | None = None
+    provider_model_id: str | None = None
+    request_parameters: dict[str, object] = field(default_factory=dict)
+    network_attempts: int = 1
+    input_token_source: str = "unknown"
+    output_token_source: str = "unknown"
 
 
 @dataclass

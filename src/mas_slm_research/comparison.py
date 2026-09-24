@@ -40,6 +40,12 @@ class AttemptMeasurements:
     cost_usd_estimate: float | None
     workflow_wall_seconds: float
     child_seconds_sum: float | None
+    network_attempts: int = 0
+    first_pass_valid: bool = False
+    repaired_valid: bool = False
+    repair_extra_calls: int = 0
+    repair_extra_tokens: int | None = 0
+    repair_extra_seconds: float = 0.0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -65,6 +71,12 @@ class SystemSummary:
     cost_usd_estimate: float | None
     workflow_wall_seconds: float
     grader_summary: Mapping[str, Any] | None
+    network_attempts: int = 0
+    first_pass_valid: int = 0
+    repaired_valid: int = 0
+    repair_extra_calls: int = 0
+    repair_extra_tokens: int | None = 0
+    repair_extra_seconds: float = 0.0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -89,6 +101,8 @@ class ComparisonReport:
     multi_wins: int
     ties: int
     uncomparable_pairs: int
+    runtime_profile: str = "legacy_v1"
+    grader_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -135,29 +149,40 @@ def _measure(attempt: ExperimentAttempt, prices: Mapping[str, PriceRate]) -> Att
         role = str(call.get("agent_name") or "")
         rate = prices.get(role)
         input_tokens, output_tokens = call.get("input_tokens"), call.get("output_tokens")
-        if (rate is None or not isinstance(input_tokens, int) or isinstance(input_tokens, bool)
+        if (rate is None or int(call.get("network_attempts") or 1) > 1
+                or not isinstance(input_tokens, int) or isinstance(input_tokens, bool)
                 or not isinstance(output_tokens, int) or isinstance(output_tokens, bool)):
             costs.append(None)
         else:
             costs.append((input_tokens * rate.input_per_1k + output_tokens * rate.output_per_1k) / 1000)
     events = tuple(execution.events) if execution is not None else ()
+    repair_calls = [call for call in llm_calls if call.get("call_kind") == "malformed_repair"]
+    retry_decisions = sum(
+        event.get("event_type") == "runtime_decision"
+        and isinstance(event.get("payload_json"), Mapping)
+        and event["payload_json"].get("decision") == "retry_after_malformed_tool_call"
+        for event in events
+    )
+    used_intervention = bool(repair_calls or retry_decisions) or any(int(call.get("text_recovered_tool_call_count") or 0) > 0 for call in llm_calls)
+    completed = attempt.result.status == RunStatus.COMPLETED
     return AttemptMeasurements(
         run_id=attempt.result.identity.run_id,
         llm_calls=len(llm_calls), tool_calls=len(tool_calls),
         text_recovered_tool_calls=sum(int(call.get("text_recovered_tool_call_count") or 0) for call in llm_calls),
-        malformed_retry_decisions=sum(
-            event.get("event_type") == "runtime_decision"
-            and isinstance(event.get("payload_json"), Mapping)
-            and event["payload_json"].get("decision") == "retry_after_malformed_tool_call"
-            for event in events
-        ),
-        input_tokens=_sum_known([call.get("input_tokens") for call in llm_calls]),
-        output_tokens=_sum_known([call.get("output_tokens") for call in llm_calls]),
-        total_tokens=_sum_known([call.get("tokens_total") for call in llm_calls]),
+        malformed_retry_decisions=retry_decisions,
+        input_tokens=None if any(int(call.get("network_attempts") or 1) > 1 for call in llm_calls) else _sum_known([call.get("input_tokens") for call in llm_calls]),
+        output_tokens=None if any(int(call.get("network_attempts") or 1) > 1 for call in llm_calls) else _sum_known([call.get("output_tokens") for call in llm_calls]),
+        total_tokens=None if any(int(call.get("network_attempts") or 1) > 1 for call in llm_calls) else _sum_known([call.get("tokens_total") for call in llm_calls]),
         usage_sources=sources,
         cost_usd_estimate=_sum_known_cost(costs),
         workflow_wall_seconds=attempt.result.timing.wall_seconds,
         child_seconds_sum=attempt.result.timing.child_seconds_sum,
+        network_attempts=sum(int(call.get("network_attempts") or 1) for call in llm_calls),
+        first_pass_valid=completed and not used_intervention,
+        repaired_valid=completed and used_intervention,
+        repair_extra_calls=len(repair_calls),
+        repair_extra_tokens=_sum_known([call.get("tokens_total") for call in repair_calls]),
+        repair_extra_seconds=sum(float(call.get("latency_ms") or 0) for call in repair_calls) / 1000.0,
     )
 
 
@@ -235,6 +260,12 @@ def compare_experiment(
             grader_summary=(aggregate_grades(grader, [attempt.grade for attempt in attempts]) if grader
                             else dict(recorded_grader_summaries[arm])
                             if recorded_grader_summaries and arm in recorded_grader_summaries else None),
+            network_attempts=sum(item.network_attempts for item in metrics),
+            first_pass_valid=sum(item.first_pass_valid for item in metrics),
+            repaired_valid=sum(item.repaired_valid for item in metrics),
+            repair_extra_calls=sum(item.repair_extra_calls for item in metrics),
+            repair_extra_tokens=_sum_known([item.repair_extra_tokens for item in metrics]),
+            repair_extra_seconds=sum(item.repair_extra_seconds for item in metrics),
         )
     pairs: list[PairedOutcome] = []
     for pair in run.pairs:
@@ -258,4 +289,6 @@ def compare_experiment(
         multi_wins=sum(pair.winner == "multi" for pair in pairs),
         ties=sum(pair.winner == "tie" for pair in pairs),
         uncomparable_pairs=sum(pair.winner is None for pair in pairs),
+        runtime_profile=run.runtime_profile,
+        grader_id=run.grader_id,
     )

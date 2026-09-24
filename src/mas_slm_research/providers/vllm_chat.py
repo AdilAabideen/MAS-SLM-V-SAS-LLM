@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import threading
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Callable, Literal, Optional, Sequence, Union
 
 import httpx
 from langchain_core.language_models import LanguageModelInput
@@ -104,6 +104,7 @@ class VLLMChat(BaseChatModel):
     )
     temperature: float = 0
     max_tokens: Optional[int] = 250
+    request_policy: Literal["legacy_v1", "configured_v2"] = "legacy_v1"
     timeout_s: float = 60.0
 
     def _llm_type(self) -> str:
@@ -230,18 +231,15 @@ class VLLMChat(BaseChatModel):
         provider_model = self._resolve_provider_model(**kwargs)
 
 
-        payload: dict[str, Any] = {
-            "model": provider_model,
-            "messages": llama_messages,
-            "temperature": 0,
-            "top_k": 1,
-            "top_p": 1,
-            "seed": 42,
-            "stream": False,
-        }
-
-        if self.max_tokens is not None:
-            payload["max_tokens"] = 250
+        payload: dict[str, Any] = {"model": provider_model, "messages": llama_messages, "stream": False}
+        if self.request_policy == "legacy_v1":
+            payload.update({"temperature": 0, "top_k": 1, "top_p": 1, "seed": 42})
+            if self.max_tokens is not None:
+                payload["max_tokens"] = 250
+        else:
+            payload["temperature"] = self.temperature
+            if self.max_tokens is not None:
+                payload["max_tokens"] = self.max_tokens
         if stop:
             payload["stop"] = stop
 
@@ -288,6 +286,14 @@ class VLLMChat(BaseChatModel):
                 allowed_tool_names=allowed_tool_names,
             )
 
-        message = AIMessage(content=content, tool_calls=tool_calls)
+        response_metadata = {
+            "provider_model_id": provider_model,
+            "request_parameters": {key: payload[key] for key in ("temperature", "max_tokens", "top_k", "top_p", "seed") if key in payload},
+            "request_policy": self.request_policy,
+            "network_attempts": 1,
+        }
+        if isinstance(data.get("usage"), dict):
+            response_metadata["token_usage"] = data["usage"]
+        message = AIMessage(content=content, tool_calls=tool_calls, response_metadata=response_metadata)
         generation = ChatGeneration(message=message)
         return ChatResult(generations=[generation], llm_output={"raw": data})

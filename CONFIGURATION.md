@@ -19,6 +19,19 @@ The experiment scheduler and comparison CLI use these registered contracts;
 the included ESI files are a fabricated offline software example.
 
 Each model entry chooses one of `model_env`, `model_id`, or `catalog`. A
+`request_policy` chooses `configured_v2` (default for new experiments) or
+`legacy_v1` (explicitly retained by the ESI preservation example). Under
+`configured_v2`, vLLM sends the resolved temperature and maximum output
+tokens without the legacy hard-coded sampling/250-token override. Direct
+legacy wrapper construction continues to default to `legacy_v1`. The built-in
+`openai` provider ID is historically named but constructs Azure OpenAI; the
+clearer `azure_openai` alias selects the same adapter. Both require an Azure
+endpoint, API version, and key; use a separately registered
+provider for standard OpenAI API access. `max_tokens` is forwarded to Azure.
+Provider call records include the actual checkpoint and decoding parameters.
+Provider-reported tokens are separated from estimates; retrying requests are
+counted, while their unreported token/cost totals stay unknown.
+
 `model_env` points to an environment variable containing the provider model ID.
 `api_key_env`, `base_url_env`, and `api_version_env` name variables whose values must be present;
 the resolved specification stores those names, never their values. The loader
@@ -57,4 +70,14 @@ schemas. `render(details=False)` and `render(details=True)` return formatted
 JSON. The preview constructs the actual kernels with an inert model whose
 inference method raises if called; it never instantiates a registered provider.
 For the preserved vLLM adapter it shows both configured model settings and
-the current effective request values, including the known 250-token cap.
+the effective request values, including the legacy 250-token cap when
+`request_policy: legacy_v1` is selected.
+
+Top-level `runtime_profile` selects `legacy_v1`, `strict_v1`, or
+`slm_assisted_v1`; see [POLICIES.md](POLICIES.md). `agents.<alias>.runtime` can set `max_model_calls`, `max_tool_calls_total`, and
+`max_elapsed_seconds` for a case's agent loop. MAS can additionally set
+`mas.max_handoffs` and `mas.max_elapsed_seconds` for the whole graph. Limits
+must be positive; when absent, the preserved legacy runtime remains unbounded.
+Exhaustion produces a failed attempt with a budget or timeout reason and
+observed call counts, not a successful prediction. Strict and assisted
+profiles supply finite defaults without silently changing legacy runs.

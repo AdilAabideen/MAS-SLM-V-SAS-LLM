@@ -495,18 +495,32 @@ class AgentKernel:
             latency_ms = int((time.perf_counter() - t0) * 1000)
 
             usage = extract_provider_usage(response)
+            response_meta = getattr(response, "response_metadata", {}) or {}
+            if not isinstance(response_meta, Mapping):
+                response_meta = {}
+            provider_model_id = response_meta.get("provider_model_id")
+            request_parameters = response_meta.get("request_parameters")
+            request_parameters = dict(request_parameters) if isinstance(request_parameters, Mapping) else {}
+            network_attempts = response_meta.get("network_attempts", 1)
+            if not isinstance(network_attempts, int) or isinstance(network_attempts, bool) or network_attempts < 1:
+                network_attempts = 1
             in_tok = usage.input_tokens
             out_tok = usage.output_tokens
-            tot_tok = usage.total_tokens
-            usage_source = usage.usage_source
-            if in_tok is None or out_tok is None or tot_tok is None:
+            input_token_source = "provider" if in_tok is not None else "estimated"
+            output_token_source = "provider" if out_tok is not None else "estimated"
+            if in_tok is None:
                 in_tok = self._token_estimator.estimate_messages_tokens(messages)
+            if out_tok is None:
                 if isinstance(response, AIMessage):
                     out_tok = self._token_estimator.estimate_ai_output_tokens(response)
                 else:
                     out_tok = self._token_estimator.estimate_jsonable_output_tokens(response)
-                tot_tok = in_tok + out_tok
-                usage_source = "estimated"
+            tot_tok = usage.total_tokens if input_token_source == output_token_source == "provider" and usage.total_tokens is not None else in_tok + out_tok
+            usage_source = (
+                "provider" if input_token_source == output_token_source == "provider"
+                else "estimated" if input_token_source == output_token_source == "estimated"
+                else "mixed"
+            )
 
             tool_calls: list[dict[str, Any]] = []
             parse_source: str | None = None
@@ -566,7 +580,7 @@ class AgentKernel:
                     call_index=call_index,
                     iteration=iteration,
                     call_kind=call_kind,
-                    model_name=str(model_name) if model_name else None,
+                    model_name=str(provider_model_id or model_name) if provider_model_id or model_name else None,
                     started_at=started_at,
                     ended_at=ended_at,
                     latency_ms=latency_ms,
@@ -581,6 +595,11 @@ class AgentKernel:
                     native_tool_call_count=native_tool_call_count,
                     tool_names=tool_names,
                     error_text=None,
+                    provider_model_id=str(provider_model_id) if provider_model_id else None,
+                    request_parameters=request_parameters,
+                    network_attempts=network_attempts,
+                    input_token_source=input_token_source,
+                    output_token_source=output_token_source,
                 )
                 self._emit_llm_metric(metric)
 
@@ -595,6 +614,9 @@ class AgentKernel:
             ended_at = datetime.utcnow()
             latency_ms = int((time.perf_counter() - t0) * 1000)
             in_tok = self._token_estimator.estimate_messages_tokens(messages)
+            network_attempts = getattr(normalized_exc, "network_attempts", 1)
+            if not isinstance(network_attempts, int) or network_attempts < 1:
+                network_attempts = 1
 
             if run_id and agent_name:
                 call_index = self._telemetry.next_call_index()
@@ -609,9 +631,9 @@ class AgentKernel:
                     ended_at=ended_at,
                     latency_ms=latency_ms,
                     input_tokens=int(in_tok),
-                    output_tokens=0,
-                    tokens_total=int(in_tok),
-                    usage_source="estimated",
+                    output_tokens=None,
+                    tokens_total=None,
+                    usage_source="partial_unknown",
                     had_tool_calls=False,
                     tool_call_count=0,
                     tool_call_parse_source=None,
@@ -619,6 +641,9 @@ class AgentKernel:
                     native_tool_call_count=0,
                     tool_names=[],
                     error_text=str(normalized_exc),
+                    input_token_source="estimated",
+                    output_token_source="unknown",
+                    network_attempts=network_attempts,
                 )
                 self._emit_llm_metric(metric)
 
