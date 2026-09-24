@@ -219,6 +219,7 @@ def test_ut_wrp_009_dr7_wrapper_retries_once_on_429_then_succeeds(monkeypatch, l
     assert result.generations[0].message.tool_calls[0]["name"] == "lookup_value"
     assert sleeps == [10.0]
     assert len(recorded) == 2
+    assert result.generations[0].message.response_metadata["network_attempts"] == 2
 
 
 @pytest.mark.unit

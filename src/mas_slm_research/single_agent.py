@@ -118,12 +118,17 @@ def _summarize_usage(llm_calls: list[dict[str, Any]]) -> TokenUsage:
     if not llm_calls:
         return TokenUsage()
     sources = {item.get("usage_source") for item in llm_calls}
-    source = UsageSource.PROVIDER if sources == {"provider"} else UsageSource.ESTIMATED
+    source = UsageSource.PROVIDER if sources == {"provider"} else UsageSource.UNKNOWN if "partial_unknown" in sources else UsageSource.ESTIMATED
+    def total(field: str) -> int | None:
+        if any(int(item.get("network_attempts") or 1) > 1 for item in llm_calls):
+            return None
+        values = [item.get(field) for item in llm_calls]
+        return sum(values) if all(isinstance(value, int) for value in values) else None
     return TokenUsage(
         source=source,
-        input_tokens=sum(int(item.get("input_tokens") or 0) for item in llm_calls),
-        output_tokens=sum(int(item.get("output_tokens") or 0) for item in llm_calls),
-        total_tokens=sum(int(item.get("tokens_total") or 0) for item in llm_calls),
+        input_tokens=total("input_tokens"),
+        output_tokens=total("output_tokens"),
+        total_tokens=total("tokens_total"),
     )
 
 

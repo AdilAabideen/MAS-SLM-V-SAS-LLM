@@ -5,12 +5,14 @@ extensions: []
 models:
   baseline:
     provider: openai
+    request_policy: legacy_v1
     model_env: BASELINE_MODEL_ID
     api_key_env: BASELINE_API_KEY
     base_url_env: BASELINE_AZURE_ENDPOINT
     api_version_env: BASELINE_AZURE_API_VERSION
   specialist:
     provider: vllm
+    request_policy: legacy_v1
     model_env: SPECIALIST_MODEL_ID
     api_key_env: SPECIALIST_API_KEY
     base_url_env: SPECIALIST_BASE_URL

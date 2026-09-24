@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 
-ModelProvider = Literal["openai", "dr7", "vllm"]
+ModelProvider = Literal["openai", "azure_openai", "dr7", "vllm"]
 
 
 class ModelPricing(BaseModel):
@@ -37,6 +37,7 @@ class ModelSpec(BaseModel):
     languages: list[str] = Field(default_factory=lambda: ["en"])
     supports_tools: bool = True
     default_temperature: float = 0.7
+    request_policy: Literal["legacy_v1", "configured_v2"] = "legacy_v1"
 
 
 FINETUNED_MULTI_AGENT_MODEL_ID_OVERRIDES: dict[str, str] = {
@@ -330,7 +331,7 @@ def build_registered_model(model_id: str, provider_settings: ProviderSettings) -
 
 def build_model_from_spec(spec: ModelSpec, provider_settings: ProviderSettings) -> BaseChatModel:
     """Build a provider model from an explicit effective spec and settings."""
-    if spec.provider == "openai":
+    if spec.provider in {"openai", "azure_openai"}:
         return _build_azure_model(spec, provider_settings)
     if spec.provider == "dr7":
         return _build_dr7_model(spec, provider_settings)
@@ -350,6 +351,8 @@ def _build_azure_model(spec: ModelSpec, connection: ProviderSettings) -> BaseCha
         "api_version": connection.azure_api_version,
         "temperature": spec.default_temperature,
     }
+    if spec.max_tokens is not None:
+        kwargs["max_tokens"] = spec.max_tokens
     parameters = inspect.signature(AzureChatOpenAI).parameters
     if "api_key" in parameters:
         kwargs["api_key"] = connection.azure_api_key
@@ -391,4 +394,5 @@ def build_vllm_model(spec: ModelSpec, connection: ProviderSettings) -> BaseChatM
         temperature=spec.default_temperature,
         max_tokens=spec.max_tokens,
         timeout_s=connection.vllm_timeout_s,
+        request_policy=spec.request_policy,
     )

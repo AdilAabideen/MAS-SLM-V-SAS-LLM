@@ -40,6 +40,7 @@ class AttemptMeasurements:
     cost_usd_estimate: float | None
     workflow_wall_seconds: float
     child_seconds_sum: float | None
+    network_attempts: int = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -65,6 +66,7 @@ class SystemSummary:
     cost_usd_estimate: float | None
     workflow_wall_seconds: float
     grader_summary: Mapping[str, Any] | None
+    network_attempts: int = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -135,7 +137,8 @@ def _measure(attempt: ExperimentAttempt, prices: Mapping[str, PriceRate]) -> Att
         role = str(call.get("agent_name") or "")
         rate = prices.get(role)
         input_tokens, output_tokens = call.get("input_tokens"), call.get("output_tokens")
-        if (rate is None or not isinstance(input_tokens, int) or isinstance(input_tokens, bool)
+        if (rate is None or int(call.get("network_attempts") or 1) > 1
+                or not isinstance(input_tokens, int) or isinstance(input_tokens, bool)
                 or not isinstance(output_tokens, int) or isinstance(output_tokens, bool)):
             costs.append(None)
         else:
@@ -151,13 +154,14 @@ def _measure(attempt: ExperimentAttempt, prices: Mapping[str, PriceRate]) -> Att
             and event["payload_json"].get("decision") == "retry_after_malformed_tool_call"
             for event in events
         ),
-        input_tokens=_sum_known([call.get("input_tokens") for call in llm_calls]),
-        output_tokens=_sum_known([call.get("output_tokens") for call in llm_calls]),
-        total_tokens=_sum_known([call.get("tokens_total") for call in llm_calls]),
+        input_tokens=None if any(int(call.get("network_attempts") or 1) > 1 for call in llm_calls) else _sum_known([call.get("input_tokens") for call in llm_calls]),
+        output_tokens=None if any(int(call.get("network_attempts") or 1) > 1 for call in llm_calls) else _sum_known([call.get("output_tokens") for call in llm_calls]),
+        total_tokens=None if any(int(call.get("network_attempts") or 1) > 1 for call in llm_calls) else _sum_known([call.get("tokens_total") for call in llm_calls]),
         usage_sources=sources,
         cost_usd_estimate=_sum_known_cost(costs),
         workflow_wall_seconds=attempt.result.timing.wall_seconds,
         child_seconds_sum=attempt.result.timing.child_seconds_sum,
+        network_attempts=sum(int(call.get("network_attempts") or 1) for call in llm_calls),
     )
 
 
@@ -235,6 +239,7 @@ def compare_experiment(
             grader_summary=(aggregate_grades(grader, [attempt.grade for attempt in attempts]) if grader
                             else dict(recorded_grader_summaries[arm])
                             if recorded_grader_summaries and arm in recorded_grader_summaries else None),
+            network_attempts=sum(item.network_attempts for item in metrics),
         )
     pairs: list[PairedOutcome] = []
     for pair in run.pairs:

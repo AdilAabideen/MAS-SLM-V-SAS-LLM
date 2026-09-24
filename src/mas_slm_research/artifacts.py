@@ -88,6 +88,8 @@ def _call_facts(call: Mapping[str, Any]) -> dict[str, Any]:
     return {key: call.get(key) for key in (
         "run_id", "agent_name", "call_index", "tool_call_id", "tool_name", "status",
         "input_tokens", "output_tokens", "tokens_total", "usage_source",
+        "provider_model_id", "request_parameters", "network_attempts",
+        "input_token_source", "output_token_source",
         "text_recovered_tool_call_count", "latency_ms",
     ) if key in call}
 

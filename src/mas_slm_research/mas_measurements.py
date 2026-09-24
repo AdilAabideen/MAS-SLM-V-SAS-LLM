@@ -75,9 +75,16 @@ def summarize_agent_measurements(
         reliability_error_count=sum(item.get("severity") == "error" for item in reliability_issues),
         finalization_failure_count=sum(code in FINALIZATION_CODES for code in issue_codes),
         tool_recovery_failure_count=sum(code in TOOL_RECOVERY_CODES for code in issue_codes),
-        input_tokens_total=sum(int(item.get("input_tokens") or 0) for item in llm_calls) if llm_calls else None,
-        output_tokens_total=sum(int(item.get("output_tokens") or 0) for item in llm_calls) if llm_calls else None,
-        tokens_total=sum(int(item.get("tokens_total") or 0) for item in llm_calls) if llm_calls else None,
+        input_tokens_total=_known_total(llm_calls, "input_tokens"),
+        output_tokens_total=_known_total(llm_calls, "output_tokens"),
+        tokens_total=_known_total(llm_calls, "tokens_total"),
         cost_usd_total=sum(cost_values) if cost_values else None,
         schema_valid=schema_valid,
     )
+
+
+def _known_total(calls: Sequence[Mapping[str, Any]], field: str) -> int | None:
+    if not calls or any(int(item.get("network_attempts") or 1) > 1 for item in calls):
+        return None
+    values = [item.get(field) for item in calls]
+    return sum(values) if all(isinstance(value, int) and not isinstance(value, bool) for value in values) else None

@@ -264,10 +264,16 @@ class MultiAgentRunner:
 def _aggregate_usage(llm_calls: tuple[dict[str, Any], ...]) -> TokenUsage:
     if not llm_calls:
         return TokenUsage()
-    source = UsageSource.PROVIDER if all(call.get("usage_source") == "provider" for call in llm_calls) else UsageSource.ESTIMATED
+    sources = {call.get("usage_source") for call in llm_calls}
+    source = UsageSource.PROVIDER if sources == {"provider"} else UsageSource.UNKNOWN if "partial_unknown" in sources else UsageSource.ESTIMATED
+    def total(field: str) -> int | None:
+        if any(int(call.get("network_attempts") or 1) > 1 for call in llm_calls):
+            return None
+        values = [call.get(field) for call in llm_calls]
+        return sum(values) if all(isinstance(value, int) for value in values) else None
     return TokenUsage(
         source=source,
-        input_tokens=sum(int(call.get("input_tokens") or 0) for call in llm_calls),
-        output_tokens=sum(int(call.get("output_tokens") or 0) for call in llm_calls),
-        total_tokens=sum(int(call.get("tokens_total") or 0) for call in llm_calls),
+        input_tokens=total("input_tokens"),
+        output_tokens=total("output_tokens"),
+        total_tokens=total("tokens_total"),
     )
