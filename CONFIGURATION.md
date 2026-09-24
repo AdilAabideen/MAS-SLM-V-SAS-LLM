@@ -26,8 +26,13 @@ tokens without the legacy hard-coded sampling/250-token override. Direct
 legacy wrapper construction continues to default to `legacy_v1`. The built-in
 `openai` provider ID is historically named but constructs Azure OpenAI; the
 clearer `azure_openai` alias selects the same adapter. Both require an Azure
-endpoint, API version, and key; use a separately registered
-provider for standard OpenAI API access. `max_tokens` is forwarded to Azure.
+endpoint, API version, and key. The built-in `openai_api` ID instead constructs
+standard `ChatOpenAI` with the resolved model ID and key named by `api_key_env`,
+without Azure settings. It forwards temperature and max output tokens only
+when explicitly set in YAML, so an old Azure catalog entry sharing the model
+ID cannot silently supply generation settings. `max_tokens` is forwarded to
+Azure when selected there. See `examples/esi/experiment-dr7.yaml` for an
+OpenAI SAS / DR7 MAS configuration.
 Provider call records include the actual checkpoint and decoding parameters.
 Provider-reported tokens are separated from estimates; retrying requests are
 counted, while their unreported token/cost totals stay unknown.

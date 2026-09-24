@@ -11,6 +11,8 @@ import pytest
 from langchain_core.messages import HumanMessage
 
 from mas_slm_research.model_registry import ProviderSettings, build_registered_model
+from mas_slm_research.configuration import ResolvedModel
+from mas_slm_research.model_factory import builtin_provider_factory
 from mas_slm_research.providers.medgemma_medical_chat import MedGemmaMedicalChatModel
 from mas_slm_research.providers.vllm_chat import VLLMChat
 
@@ -41,6 +43,50 @@ class RecordingClient:
     def post(self, url, headers, json):
         self.requests.append({"url": url, "headers": headers, "body": json})
         return self.response
+
+
+def test_standard_openai_factory_uses_selected_model_and_key_without_azure(monkeypatch):
+    import langchain_openai
+
+    observed = []
+    monkeypatch.setattr(langchain_openai, "ChatOpenAI", lambda **kwargs: observed.append(kwargs) or object())
+    model = ResolvedModel(
+        name="baseline", provider="openai_api", model_id="gpt-4o",
+        model_env="BASELINE_MODEL_ID", catalog=None, api_key_env="OPENAI_API_KEY",
+        base_url_env=None, api_version_env=None, temperature=None, max_tokens=None,
+    )
+    factory = builtin_provider_factory("openai_api")
+    factory(model, {"OPENAI_API_KEY": "test-only-key"})
+    assert observed == [{"model": "gpt-4o", "api_key": "test-only-key"}]
+
+    configured = ResolvedModel(**{**vars(model), "temperature": 0.2, "max_tokens": 300})
+    factory(configured, {"OPENAI_API_KEY": "test-only-key"})
+    assert observed[-1] == {
+        "model": "gpt-4o", "api_key": "test-only-key", "temperature": 0.2, "max_tokens": 300,
+    }
+    with pytest.raises(ValueError, match="OpenAI API key"):
+        factory(model, {})
+    with pytest.raises(ValueError, match="OpenAI API key"):
+        factory(model, {"OPENAI_API_KEY": "  "})
+
+
+def test_standard_openai_factory_does_not_replace_historical_azure_provider(monkeypatch):
+    import langchain_openai
+
+    observed = []
+    monkeypatch.setattr(langchain_openai, "AzureChatOpenAI", lambda **kwargs: observed.append(kwargs) or object())
+    model = ResolvedModel(
+        name="baseline", provider="openai", model_id="gpt-4o",
+        model_env=None, catalog=None, api_key_env="BASELINE_API_KEY",
+        base_url_env="BASELINE_AZURE_ENDPOINT", api_version_env="BASELINE_AZURE_API_VERSION",
+        temperature=None, max_tokens=None,
+    )
+    builtin_provider_factory("openai")(model, {
+        "BASELINE_API_KEY": "test-only-key",
+        "BASELINE_AZURE_ENDPOINT": "https://azure.invalid",
+        "BASELINE_AZURE_API_VERSION": "2024-02-01",
+    })
+    assert observed[0]["azure_endpoint"] == "https://azure.invalid"
 
 
 @pytest.mark.unit

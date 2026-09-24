@@ -20,7 +20,7 @@ def test_builtin_esi_assets_resolve_without_backend() -> None:
     assert registry.resolve("payload_builders", "esi.legacy_v1")
     assert "esi.doctor_agent_v1" in registry.ids("payload_builders")
     assert registry.resolve("models", "medgemma-4b-it").provider == "dr7"
-    assert registry.ids("providers") == ("azure_openai", "dr7", "openai", "vllm")
+    assert registry.ids("providers") == ("azure_openai", "dr7", "openai", "openai_api", "vllm")
 
 
 def test_explicit_extension_registers_every_component_kind(monkeypatch: pytest.MonkeyPatch) -> None:

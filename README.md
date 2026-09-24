@@ -19,6 +19,8 @@ PYTHONPATH=src python -m mas_slm_research.cli compare examples/esi/experiment.ya
 
 The fixture supplies all model responses and dummy environment values; these commands make no provider requests. `validate` rejects incomplete configuration or data before inference. `inspect` shows the SAS/MAS models and agents, ordered tools, workflow routes, payload schemas, gates, and effective model choices. `compare` runs both systems on the same three synthetic ESI cases, writes the ordered human trace to stderr, and emits machine-readable JSON to stdout. To save a run, omit `--no-artifacts` and choose a new `--output-dir results/my-run`; `summarize results/my-run` reconstructs its totals without inference. See [CLI.md](CLI.md) and [ARTIFACTS.md](ARTIFACTS.md).
 
+For a standard OpenAI API baseline against DR7 MedGemma specialists, use [`examples/esi/experiment-dr7.yaml`](examples/esi/experiment-dr7.yaml). Export `OPENAI_API_KEY`, `BASELINE_MODEL_ID`, `DR7_API_KEY`, and `DR7_BASE_URL`, then run `validate`, `inspect`, or `compare` against that file **without** `--fixture` for live requests. The DR7 adapter appends `/chat/completions` to the configured base URL. The existing `provider: openai` ID remains an Azure adapter for historical configurations; `provider: openai_api` selects the standard OpenAI API. For a no-key software check of this configuration, pass `--fixture examples/esi/offline_fixture_openai_dr7.json`; it replaces both live providers with scripted responses.
+
 An editable package install is optional:
 
 ```sh

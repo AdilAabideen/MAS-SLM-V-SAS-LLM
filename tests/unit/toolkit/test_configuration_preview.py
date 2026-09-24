@@ -20,6 +20,7 @@ from tests.doubles.fake_provider import FakeChatModel
 
 
 ESI_EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "esi" / "experiment.yaml"
+OPENAI_DR7_EXAMPLE = ESI_EXAMPLE.with_name("experiment-dr7.yaml")
 ENV = {
     "BASELINE_MODEL_ID": "gpt-4o", "BASELINE_API_KEY": "private-baseline-value",
     "BASELINE_AZURE_ENDPOINT": "https://azure.invalid", "BASELINE_AZURE_API_VERSION": "2024-02-01",
@@ -32,6 +33,21 @@ def _esi_registry() -> ComponentRegistry:
     registry = ComponentRegistry()
     register_builtin_components(registry)
     return registry
+
+
+def test_openai_dr7_preview_uses_standard_provider_without_azure_defaults() -> None:
+    loaded = load_configuration(OPENAI_DR7_EXAMPLE, registry=_esi_registry(), environment={
+        "BASELINE_MODEL_ID": "gpt-4o", "OPENAI_API_KEY": "test-only-openai-key",
+        "DR7_API_KEY": "test-only-dr7-key", "DR7_BASE_URL": "https://dr7.invalid/api/v1/medical",
+    })
+    preview = inspect_configuration(loaded)
+    baseline = preview.concise["sas"]["model"]
+    assert baseline["provider"] == "openai_api"
+    assert baseline["provider_model_id"] == "gpt-4o"
+    assert baseline["actual_request_decoding"] == {"temperature": None, "max_tokens": None}
+    assert preview.concise["mas"]["roles"]["esi1_agent"]["model"]["provider"] == "dr7"
+    assert "test-only-openai-key" not in preview.render(details=True)
+    assert "test-only-dr7-key" not in preview.render(details=True)
 
 
 def test_esi_preview_matches_constructed_prompt_model_route_and_policy(monkeypatch: pytest.MonkeyPatch) -> None:

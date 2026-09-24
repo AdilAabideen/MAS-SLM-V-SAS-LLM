@@ -128,7 +128,7 @@ def register_builtin_components(registry: ComponentRegistry) -> None:
 
     registry.register("workflows", "esi.legacy_v1", ESI_MAS)
     registry.register("payload_builders", "esi.legacy_v1", build_pending_agent_payload)
-    for provider_id in ("openai", "azure_openai", "dr7", "vllm"):
+    for provider_id in ("openai", "azure_openai", "openai_api", "dr7", "vllm"):
         registry.register("providers", provider_id, builtin_provider_factory(provider_id))
     for role, builder in payload_builders.items():
         registry.register("payload_builders", f"esi.{role}_v1", builder)

@@ -1,0 +1,70 @@
+version: 1
+name: esi-openai-dr7-comparison
+runtime_profile: legacy_v1
+extensions: []
+
+models:
+  baseline:
+    provider: openai_api
+    request_policy: legacy_v1
+    model_env: BASELINE_MODEL_ID
+    api_key_env: OPENAI_API_KEY
+
+
+  specialist:
+    provider: dr7
+    request_policy: legacy_v1
+    model_id: medgemma-4b-it
+    api_key_env: DR7_API_KEY
+    base_url_env: DR7_BASE_URL
+
+agents:
+  baseline:
+    definition: esi.single_agent_v1
+    model: baseline
+  esi1:
+    definition: esi.esi1_v1
+    model: specialist
+  esi2:
+    definition: esi.esi2_v1
+    model: specialist
+  esi345:
+    definition: esi.esi345_v1
+    model: specialist
+  vitals:
+    definition: esi.vitals_v1
+    model: specialist
+  doctor:
+    definition: esi.doctor_v1
+    model: specialist
+
+sas:
+  agent: baseline
+  model: baseline
+
+mas:
+  default_model: specialist
+  agents:
+    esi1_agent: esi1
+    esi2_agent: esi2
+    esi345_agent: esi345
+    vitals_agent: vitals
+    doctor_agent: doctor
+  model_overrides: {}
+  workflow: workflow.yaml
+
+dataset:
+  loader: esi.jsonl_v1
+  path: cases.jsonl
+grader: esi.final_acuity_v1
+repetitions: 1
+schedule: system_major
+
+reporting:
+  console: full
+  color: auto
+  output_directory: ../../results/esi-openai-dr7-comparison
+
+telemetry:
+  enabled: false
+  exporter: memory

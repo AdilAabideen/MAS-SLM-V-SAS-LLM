@@ -30,7 +30,9 @@ Call `register_builtin_components(registry)` to install the preserved ESI
 workflow, its role payload builders, and the existing model catalog. The
 registration remains separate from runtime construction, so inspecting the
 inventory does not connect to any provider. Built-in ESI agents, tools, and
-schemas are also registered. Use `registry.inventory()` or
+schemas are also registered. Built-in provider IDs are `openai` and
+`azure_openai` for the historical Azure adapter, `openai_api` for the standard
+OpenAI API, `dr7`, and `vllm`. Use `registry.inventory()` or
 `registry.ids(kind)` to see effective IDs, and `registry.resolve(kind, id)` to
 obtain an implementation.
 
