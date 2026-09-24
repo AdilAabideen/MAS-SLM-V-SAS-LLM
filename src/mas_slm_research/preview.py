@@ -43,6 +43,10 @@ def _catalog_spec(loaded: LoadedConfiguration, model: ResolvedModel) -> ModelSpe
 
 def _model_view(loaded: LoadedConfiguration, model: ResolvedModel, role: str) -> dict[str, Any]:
     catalog = _catalog_spec(loaded, model)
+    if catalog is not None and catalog.provider != model.provider and not (
+        {catalog.provider, model.provider} == {"openai", "azure_openai"}
+    ):
+        catalog = None
     if catalog is None and model.provider in {"openai", "azure_openai", "dr7", "vllm"}:
         catalog = ModelSpec(id=model.model_id, provider=model.provider)
     base_provider_id = catalog.provider_model_id if catalog and catalog.provider_model_id else model.model_id
@@ -67,6 +71,8 @@ def _model_view(loaded: LoadedConfiguration, model: ResolvedModel, role: str) ->
     elif model.provider in {"openai", "azure_openai"}:
         actual_decoding = {"temperature": temperature, "max_tokens": max_tokens,
                            "policy": model.request_policy}
+    elif model.provider == "openai_api":
+        actual_decoding = {"temperature": model.temperature, "max_tokens": model.max_tokens}
     else:
         actual_decoding = None
     return {

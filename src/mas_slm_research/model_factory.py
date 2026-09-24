@@ -15,13 +15,15 @@ ProviderFactory = Callable[[ResolvedModel, Mapping[str, str]], Any]
 
 
 def builtin_provider_factory(provider_id: str) -> ProviderFactory:
-    """Return a factory using the preserved Azure, Dr7, or vLLM adapter."""
-    if provider_id not in {"openai", "azure_openai", "dr7", "vllm"}:
+    """Return a factory for a built-in provider adapter."""
+    if provider_id not in {"openai", "azure_openai", "openai_api", "dr7", "vllm"}:
         raise ValueError(f"Unknown built-in provider {provider_id!r}")
 
     def build(model: ResolvedModel, environment: Mapping[str, str]) -> Any:
         if model.provider != provider_id:
             raise ValueError(f"Provider factory {provider_id!r} cannot build {model.provider!r}")
+        if provider_id == "openai_api":
+            return _build_standard_openai_model(model, environment)
         try:
             original = get_registered_model_spec(model.catalog or model.model_id)
         except KeyError:
@@ -45,3 +47,19 @@ def builtin_provider_factory(provider_id: str) -> ProviderFactory:
         return build_model_from_spec(effective, settings)
 
     return build
+
+
+def _build_standard_openai_model(model: ResolvedModel, environment: Mapping[str, str]) -> Any:
+    """Use the standard OpenAI API without inheriting historical Azure catalog defaults."""
+    key = environment.get(model.api_key_env) if model.api_key_env else None
+    if not key or not key.strip():
+        raise ValueError("OpenAI API key must be supplied through api_key_env")
+
+    from langchain_openai import ChatOpenAI
+
+    options: dict[str, Any] = {"model": model.model_id, "api_key": key}
+    if model.temperature is not None:
+        options["temperature"] = model.temperature
+    if model.max_tokens is not None:
+        options["max_tokens"] = model.max_tokens
+    return ChatOpenAI(**options)
