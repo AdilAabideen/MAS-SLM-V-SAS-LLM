@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 import yaml
 from langchain_core.tools import tool
@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict
 
 from mas_slm_research.agents.definition import AgentDefinition
 from mas_slm_research.configuration import WorkflowFileSpec
-from mas_slm_research.grading import BaseGrader, GradeDecision, GradeResult, GradeStatus
+from mas_slm_research.grading import BaseGrader, GradeDecision
 from mas_slm_research.handoff import HandoffDefinition, create_handoff_tools, define_handoff
 from mas_slm_research.kernel import AgentKernel
 from mas_slm_research.mas_contract import MASState
@@ -110,14 +110,6 @@ class ExactWordCountGrader(BaseGrader):
         answer = WordCountOutput.model_validate(actual)
         passed = answer.count == expected["count"]
         return GradeDecision(passed=passed, score=1.0 if passed else 0.0)
-
-    def aggregate(self, results: Sequence[GradeResult]) -> Mapping[str, Any]:
-        attempted = len(results)
-        passed = sum(result.passed is True for result in results)
-        graded = sum(result.status == GradeStatus.GRADED for result in results)
-        return {"attempted": attempted, "graded": graded, "passed": passed,
-                "accuracy_all_attempts": passed / attempted if attempted else None}
-
 
 def register_components(registry: Any) -> None:
     """Register implementations once, using the adjacent YAML as the workflow contract."""

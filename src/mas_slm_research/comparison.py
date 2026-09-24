@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from .configuration import LoadedConfiguration
 from .contracts import RunStatus
 from .experiment import ExperimentAttempt, ExperimentRun
-from .grading import GradeStatus, GraderLike, aggregate_grades, require_grader
+from .grading import BaseGrader, GradeStatus
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -212,13 +212,12 @@ def _validate_records(run: ExperimentRun) -> None:
 
 
 def compare_experiment(
-    run: ExperimentRun, *, grader: GraderLike | None = None,
+    run: ExperimentRun, *, grader: BaseGrader | None = None,
     prices_by_role: Mapping[str, PriceRate] | None = None,
     recorded_grader_summaries: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> ComparisonReport:
     """Compute all denominators from case attempts; never drop a failed pair."""
     _validate_records(run)
-    grader = require_grader(grader) if grader is not None else None
     prices = prices_by_role or {}
     measurements = tuple(_measure(attempt, prices) for attempt in run.attempts)
     summaries: dict[str, SystemSummary] = {}
@@ -257,7 +256,7 @@ def compare_experiment(
             usage_sources=usage_sources,
             cost_usd_estimate=_sum_known_cost([item.cost_usd_estimate for item in metrics]),
             workflow_wall_seconds=sum(item.workflow_wall_seconds for item in metrics),
-            grader_summary=(aggregate_grades(grader, [attempt.grade for attempt in attempts]) if grader
+            grader_summary=(grader.aggregate([attempt.grade for attempt in attempts]) if grader
                             else dict(recorded_grader_summaries[arm])
                             if recorded_grader_summaries and arm in recorded_grader_summaries else None),
             network_attempts=sum(item.network_attempts for item in metrics),

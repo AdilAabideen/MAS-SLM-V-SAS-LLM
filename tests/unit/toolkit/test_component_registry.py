@@ -8,6 +8,7 @@ import types
 import pytest
 from pydantic import BaseModel
 
+from mas_slm_research.grading import BaseGrader, GradeDecision
 from mas_slm_research.registry import ComponentRegistry, register_builtin_components
 from mas_slm_research.workflows.esi.definition import ESI_MAS
 
@@ -29,12 +30,10 @@ def test_explicit_extension_registers_every_component_kind(monkeypatch: pytest.M
     class ExampleSchema(BaseModel):
         value: str
 
-    class ExampleGrader:
+    class ExampleGrader(BaseGrader):
         def evaluate(self, expected, actual):
-            return expected == actual
-
-        def aggregate(self, results):
-            return sum(results)
+            passed = expected == actual
+            return GradeDecision(passed=passed, score=float(passed))
 
     def register_components(registry: ComponentRegistry) -> None:
         registry.register("providers", "test.provider", lambda spec, settings: object())
@@ -54,7 +53,7 @@ def test_explicit_extension_registers_every_component_kind(monkeypatch: pytest.M
 
     assert all(registry.ids(kind) for kind in registry.inventory())
     assert registry.resolve("schemas", "test.schema") is ExampleSchema
-    assert registry.resolve("graders", "test.grader") is ExampleGrader
+    assert isinstance(registry.resolve("graders", "test.grader"), ExampleGrader)
     with pytest.raises(ValueError, match="already loaded"):
         registry.load_module(module.__name__)
 
@@ -68,6 +67,8 @@ def test_duplicate_unknown_and_invalid_components_have_context() -> None:
         registry.resolve("agents", "missing")
     with pytest.raises(TypeError, match="schemas component 'bad'"):
         registry.register("schemas", "bad", object())
+    with pytest.raises(TypeError, match="graders component 'bad'"):
+        registry.register("graders", "bad", lambda: None)
     with pytest.raises(ValueError, match="Unknown component kind"):
         registry.register("other", "x", lambda: None)  # type: ignore[arg-type]
 

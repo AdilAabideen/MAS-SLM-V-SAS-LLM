@@ -9,7 +9,7 @@ from types import MappingProxyType
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .configuration import LoadedConfiguration
-from .grading import GraderLike, require_grader
+from .grading import BaseGrader
 
 
 class DatasetError(ValueError):
@@ -171,7 +171,7 @@ def load_dataset(
     path: Path,
     loader_id: str,
     loader: DatasetLoader,
-    grader: GraderLike,
+    grader: BaseGrader,
     split: str | None = None,
     case_ids: Sequence[str] | None = None,
 ) -> LoadedDataset:
@@ -216,7 +216,7 @@ def load_configured_dataset(
 ) -> LoadedDataset:
     """Resolve the selected loader and grader and validate the dataset now."""
     loader = loaded.registry.resolve("dataset_loaders", loaded.experiment.dataset.loader)
-    grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
+    grader = loaded.registry.resolve("graders", loaded.experiment.grader)
     return load_dataset(
         path=loaded.dataset_path, loader_id=loaded.experiment.dataset.loader,
         loader=loader, grader=grader, split=split, case_ids=case_ids,

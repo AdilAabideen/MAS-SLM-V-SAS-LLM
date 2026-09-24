@@ -2,57 +2,50 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
-from mas_slm_research.grading import BaseGrader, GradeDecision, GradeResult, GradeStatus
-
-from .legacy_single_agent_acuity import SingleAgentAcuityEvaluator
+from mas_slm_research.grading import BaseGrader, GradeDecision
 
 
-LEGACY_DOCTOR_DIAGNOSTIC = {
-    "id": "doctor_always_pass",
-    "status": "placeholder_diagnostic_only",
-    "headline_final_task_grader": False,
-}
+def _acuity(value: Any) -> int | None:
+    """Accept the integer-like final levels supported by the original grader."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
 
 
 class ESIFinalAcuityGrader(BaseGrader):
-    """Apply the preserved exact-acuity rule to either system's final output.
-
-    The legacy doctor always-pass evaluator is a placeholder diagnostic and
-    must never be used as the comparison's final-task accuracy.
-    """
+    """Score either system by comparing its final ESI level with the case label."""
 
     label_name = "esi.final_acuity_v1"
 
-    def __init__(self) -> None:
-        self._legacy = SingleAgentAcuityEvaluator()
-
     def validate_expected(self, expected: Mapping[str, Any]) -> None:
-        self._legacy.validate_expected(dict(expected))
+        if set(expected) != {"acuity"}:
+            raise ValueError("expected must only contain: acuity")
+        acuity = expected["acuity"]
+        if not isinstance(acuity, int) or not 1 <= acuity <= 5:
+            raise ValueError("expected.acuity must be an integer between 1 and 5")
 
     def evaluate(self, expected: Mapping[str, Any], actual: Mapping[str, Any]) -> GradeDecision:
-        verdict = self._legacy.evaluate(dict(expected), dict(actual), agent_status="succeeded")
+        value = actual.get("final_esi_level", actual.get("acuity"))
+        predicted = _acuity(value)
+        valid = predicted is not None and 1 <= predicted <= 5
+        passed = valid and predicted == expected["acuity"]
         return GradeDecision(
-            passed=verdict.passed, score=verdict.score,
-            diagnostics={"legacy_diff": verdict.diff_json, "legacy_metrics": verdict.metrics_json},
+            passed=passed,
+            score=1.0 if passed else 0.0,
+            diagnostics={
+                "expected_acuity": expected["acuity"],
+                "predicted_acuity": predicted,
+                "invalid_prediction": not valid,
+            },
         )
-
-    def aggregate(self, results: Sequence[GradeResult]) -> Mapping[str, Any]:
-        records = tuple(results)
-        attempted = len(records)
-        passed = sum(item.passed is True for item in records)
-        graded = sum(item.status == GradeStatus.GRADED for item in records)
-        execution_failed = sum(item.status == GradeStatus.EXECUTION_FAILED for item in records)
-        grader_errors = sum(item.status == GradeStatus.GRADER_ERROR for item in records)
-        return {
-            "label": self.label_name,
-            "attempted": attempted,
-            "graded": graded,
-            "passed": passed,
-            "execution_failed": execution_failed,
-            "grader_errors": grader_errors,
-            "accuracy_all_attempts": round(passed / attempted, 4) if attempted else None,
-            "accuracy_graded": round(passed / graded, 4) if graded else None,
-            "doctor_diagnostic": dict(LEGACY_DOCTOR_DIAGNOSTIC),
-        }

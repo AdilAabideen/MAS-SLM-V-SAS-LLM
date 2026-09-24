@@ -1,1 +1,1 @@
-"""Task grading and legacy evaluator adapters."""
+"""Built-in task graders."""
