@@ -43,6 +43,7 @@ class ConsoleRenderer:
         self.width = width or shutil.get_terminal_size((100, 24)).columns
         self._handoff_targets: dict[str, str] = {}
         self._agent_names: dict[str, str] = {}
+        self._system_id: str | None = None
         self.use_color = "NO_COLOR" not in os.environ and (
             color == "always" or color == "auto" and bool(getattr(self.stream, "isatty", lambda: False)())
         )
@@ -74,10 +75,14 @@ class ConsoleRenderer:
                     or (agent_names or {}).get(str(event.get("agent_run_id"))) or "workflow")
         payload = event.get("payload_json")
         if kind == "agent_started":
-            self._line(f"Agent: {agent}", color="1;34")
-            self._line("")
+            if self._system_id != "multi":
+                self._line(f"Agent: {agent}", color="1;34")
+                self._line("")
         elif kind == "tool_call":
-            self._line(f"[Tool call] {event.get('tool_name')}", color="36")
+            label = f"[Tool call] {event.get('tool_name')}"
+            if self._system_id == "multi":
+                label = f"Agent: {agent} | {label}"
+            self._line(label, color="36")
             if self.mode == "full":
                 arguments = payload.get("args") if isinstance(payload, Mapping) else payload
                 if arguments is not None:
@@ -132,6 +137,7 @@ class ConsoleRenderer:
     ) -> None:
         self._handoff_targets.clear()
         self._agent_names.clear()
+        self._system_id = system_id
         self._line("")
         label = {"single": "SAS · single-agent system", "multi": "MAS · multi-agent system"}.get(system_id, system_id)
         self._line(f"{label} | Case: {case_id} | Repetition: {repetition}", color="1;34")
