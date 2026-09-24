@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from dotenv import dotenv_values
 from langchain_core.messages import AIMessage
 
 from .comparison import compare_experiment, configured_prices
@@ -90,6 +91,29 @@ def _load_fixture(path: Path | None) -> tuple[Mapping[str, str] | None, Any]:
     return environment, model_factory
 
 
+def _experiment_environment(config_path: Path, fixture_env: Mapping[str, str] | None) -> Mapping[str, str]:
+    """Resolve the nearest experiment .env; exported variables take precedence."""
+    if fixture_env is not None:
+        return fixture_env
+
+    file_values: dict[str, str] = {}
+    home = Path.home().resolve()
+    for directory in config_path.expanduser().resolve().parents:
+        if directory == home:
+            break
+        env_path = directory / ".env"
+        if env_path.is_file():
+            try:
+                file_values = {
+                    key: value for key, value in dotenv_values(env_path).items()
+                    if value is not None
+                }
+            except (OSError, UnicodeError) as exc:
+                raise ValueError(f"cannot read experiment environment file {env_path}: {exc}") from exc
+            break
+    return {**file_values, **os.environ}
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mas-slm", description="Run and inspect registered SAS/MAS experiments")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -135,9 +159,10 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         ) if key in report}
 
     fixture_env, model_factory = _load_fixture(args.fixture)
+    environment = _experiment_environment(args.config, fixture_env)
     registry = ComponentRegistry()
     register_builtin_components(registry)
-    loaded = load_configuration(args.config, registry=registry, environment=fixture_env or os.environ)
+    loaded = load_configuration(args.config, registry=registry, environment=environment)
     renderer = None
     if args.command in {"run", "compare"}:
         renderer = ConsoleRenderer(
@@ -157,7 +182,7 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
     if args.command == "run":
         dataset = load_configured_dataset(loaded, case_ids=(args.case,))
         case = dataset.cases[0]
-        systems = build_configured_systems(loaded, model_factory=model_factory)
+        systems = build_configured_systems(loaded, model_factory=model_factory, environment=environment)
         grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
         identity = RunIdentity(experiment_id=str(uuid.uuid4()), system_id=args.system,
                                case_id=case.case_id, repetition=1, run_id=str(uuid.uuid4()))
@@ -174,7 +199,7 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
             print(f"reporting warning: {type(exc).__name__}: {exc}", file=sys.stderr)
         trace = trace_case_execution(
             execution, grade=grade, config=trace_config,
-            environment=fixture_env or os.environ,
+            environment=environment,
         )
         if trace.enabled:
             print(f"tracing: {len(trace.spans)} spans captured", file=sys.stderr)
@@ -195,7 +220,7 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
                 directory=output_dir, loaded=loaded, dataset=dataset,
                 experiment_id=experiment_id, prices_by_role=prices,
                 include_events=args.events_file,
-                environment=fixture_env or os.environ,
+                environment=environment,
             )
 
         def observe(attempt):
@@ -205,7 +230,7 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
 
         try:
             run = await run_configured_experiment(
-                loaded, model_factory=model_factory, experiment_id=experiment_id,
+                loaded, model_factory=model_factory, environment=environment, experiment_id=experiment_id,
                 on_attempt=observe,
             )
             if writer is not None and writer.manifest["attempts_written"] != len(run.attempts):
@@ -216,7 +241,7 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
             raise
         for warning in run.reporting_errors:
             print(f"reporting warning: {warning}", file=sys.stderr)
-        trace = trace_experiment(run, config=trace_config, environment=fixture_env or os.environ)
+        trace = trace_experiment(run, config=trace_config, environment=environment)
         if trace.enabled:
             print(f"tracing: {len(trace.spans)} spans captured", file=sys.stderr)
         for warning in trace.warnings:

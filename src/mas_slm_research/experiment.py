@@ -209,13 +209,14 @@ async def run_experiment(
 
 async def run_configured_experiment(
     loaded: LoadedConfiguration, *, model_factory: ModelFactory | None = None,
+    environment: Mapping[str, str] | None = None,
     experiment_id: str | None = None, cancel_requested: Callable[[], bool] | None = None,
     on_attempt: Callable[[ExperimentAttempt], None] | None = None,
 ) -> ExperimentRun:
     """Perform all dataset preflight checks before building or invoking models."""
     dataset = load_configured_dataset(loaded)
     grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
-    systems = build_configured_systems(loaded, model_factory=model_factory)
+    systems = build_configured_systems(loaded, model_factory=model_factory, environment=environment)
     return await run_experiment(
         loaded, dataset=dataset, systems=systems, grader=grader,
         experiment_id=experiment_id, cancel_requested=cancel_requested,

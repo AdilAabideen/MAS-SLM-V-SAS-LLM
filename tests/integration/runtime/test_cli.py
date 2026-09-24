@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import os
 import signal
 import subprocess
@@ -10,10 +11,29 @@ import sys
 import time
 from pathlib import Path
 
+from mas_slm_research.cli import _execute, _parser
+
 
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG = ROOT / "examples" / "esi" / "experiment.yaml"
 FIXTURE = ROOT / "examples" / "esi" / "offline_fixture.json"
+DR7_CONFIG = ROOT / "examples" / "esi" / "experiment-dr7.yaml"
+DR7_FIXTURE = ROOT / "examples" / "esi" / "offline_fixture_openai_dr7.json"
+
+
+def _dotenv_experiment(tmp_path: Path) -> Path:
+    example_dir = tmp_path / "study" / "examples" / "esi"
+    example_dir.mkdir(parents=True)
+    for name in ("experiment-dr7.yaml", "workflow.yaml", "cases.jsonl"):
+        (example_dir / name).write_bytes((DR7_CONFIG.parent / name).read_bytes())
+    (tmp_path / ".env").write_text(
+        "BASELINE_MODEL_ID=dotenv-baseline\n"
+        "OPENAI_API_KEY=dotenv-openai-key\n"
+        "DR7_API_KEY=dotenv-dr7-key\n"
+        "DR7_BASE_URL=https://dr7.invalid/api/v1/medical\n",
+        encoding="utf-8",
+    )
+    return example_dir / "experiment-dr7.yaml"
 
 
 def _cli(*args: str) -> subprocess.CompletedProcess[str]:
@@ -42,6 +62,64 @@ def test_validate_and_inspect_are_offline_and_reveal_no_fixture_credentials() ->
     assert json.loads(validated.stdout)["cases"] == 3
     assert json.loads(inspected.stdout)["sas"]["model"]["model_id"] == "offline-baseline"
     assert "fixture-only" not in validated.stdout + inspected.stdout
+
+
+def test_cli_loads_ancestor_dotenv_and_exported_values_win(tmp_path: Path) -> None:
+    config = _dotenv_experiment(tmp_path)
+    environment = {key: value for key, value in os.environ.items() if key not in {
+        "BASELINE_MODEL_ID", "OPENAI_API_KEY", "DR7_API_KEY", "DR7_BASE_URL",
+    }}
+    environment["PYTHONPATH"] = str(ROOT / "src")
+
+    def validate() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "mas_slm_research.cli", "validate", str(config)],
+            cwd=ROOT, env=environment, capture_output=True, text=True, check=False,
+        )
+
+    loaded = validate()
+    assert loaded.returncode == 0, loaded.stderr
+    assert json.loads(loaded.stdout)["configuration"]["resolved_models"]["baseline"]["model_id"] == "dotenv-baseline"
+    assert "dotenv-openai-key" not in loaded.stdout + loaded.stderr
+    assert "dotenv-dr7-key" not in loaded.stdout + loaded.stderr
+
+    environment["BASELINE_MODEL_ID"] = "exported-baseline"
+    overridden = validate()
+    assert overridden.returncode == 0, overridden.stderr
+    assert json.loads(overridden.stdout)["configuration"]["resolved_models"]["baseline"]["model_id"] == "exported-baseline"
+
+    fixture = subprocess.run(
+        [sys.executable, "-m", "mas_slm_research.cli", "validate", str(config),
+         "--fixture", str(DR7_FIXTURE)],
+        cwd=ROOT, env=environment, capture_output=True, text=True, check=False,
+    )
+    assert fixture.returncode == 0, fixture.stderr
+    assert json.loads(fixture.stdout)["configuration"]["resolved_models"]["baseline"]["model_id"] == "offline-baseline"
+
+
+def test_cli_passes_dotenv_values_to_live_provider_factory_without_network(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    config = _dotenv_experiment(tmp_path)
+    for name in ("BASELINE_MODEL_ID", "OPENAI_API_KEY", "DR7_API_KEY", "DR7_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
+    constructed: list[dict] = []
+
+    def fake_chat_openai(**options):
+        constructed.append(options)
+        from mas_slm_research.cli import _load_fixture
+        _, factory = _load_fixture(DR7_FIXTURE)
+        return factory(None, "baseline")
+
+    monkeypatch.setattr("langchain_openai.ChatOpenAI", fake_chat_openai)
+    result = asyncio.run(_execute(_parser().parse_args([
+        "run", str(config), "--system", "single", "--case", "synthetic-esi1-001",
+        "--console", "none",
+    ])))
+    assert result["result"]["status"] == "completed"
+    assert len(constructed) == 1
+    assert constructed[0]["model"] == "dotenv-baseline"
+    assert str(constructed[0]["api_key"]) == "dotenv-openai-key"
 
 
 def test_run_compare_and_summarize_scripted_clone_fixture(tmp_path: Path) -> None:
