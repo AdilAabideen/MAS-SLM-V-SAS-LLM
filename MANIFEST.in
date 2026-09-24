@@ -10,6 +10,7 @@ include ESI_BENCHMARK.md
 include EXPERIMENTS.md
 include GRADING.md
 include TRACING.md
+include POLICIES.md
 recursive-include examples *.md *.py *.yaml *.jsonl *.json
 recursive-exclude docs *
 recursive-exclude results *

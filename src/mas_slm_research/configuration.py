@@ -112,6 +112,7 @@ class TelemetryConfig(_StrictSpec):
 class ExperimentSpec(_StrictSpec):
     version: Literal[1]
     name: str = Field(min_length=1)
+    runtime_profile: Literal["legacy_v1", "strict_v1", "slm_assisted_v1"] = "legacy_v1"
     extensions: tuple[str, ...] = ()
     models: dict[str, ModelConfig] = Field(min_length=1)
     agents: dict[str, AgentConfig] = Field(min_length=1)

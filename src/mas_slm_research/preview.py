@@ -151,6 +151,9 @@ def inspect_configuration(loaded: LoadedConfiguration) -> ConfigurationPreview:
             }
         return {
             "workflow_id": systems.workflow.metadata.workflow_id,
+            "runtime_profile": spec.runtime_profile,
+            "max_handoffs": systems.mas_runner.max_handoffs,
+            "max_elapsed_seconds": systems.mas_runner.max_elapsed_seconds,
             "workflow_version": systems.workflow.metadata.version,
             "selected_definition": loaded.workflow_file.definition,
             "start_agents": list(systems.workflow.start_agents),
@@ -174,6 +177,7 @@ def inspect_configuration(loaded: LoadedConfiguration) -> ConfigurationPreview:
     common = {
         "version": spec.version,
         "name": spec.name,
+        "runtime_profile": spec.runtime_profile,
         "paths": {
             "experiment": str(loaded.experiment_path),
             "workflow": str(loaded.workflow_path),

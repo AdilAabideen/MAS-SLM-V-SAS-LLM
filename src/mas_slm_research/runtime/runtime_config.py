@@ -11,6 +11,7 @@ class RuntimeConfig:
     """Central runtime policy switches for hand-rolled agent execution."""
 
     multi_agent: bool = False
+    policy_id: str = "legacy_v1"
     print_events: bool = False
     persist_events: bool = True
     disable_final_answer_tool_when_handoff_tools_present: bool = True

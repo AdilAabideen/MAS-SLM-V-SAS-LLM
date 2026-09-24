@@ -8,4 +8,4 @@ Each `ExperimentAttempt` records a sequence number, `(case_id, repetition, syste
 
 An explicit cancellation callback can stop scheduling before the next attempt. Cancellation during a runner call marks that attempt failed with `experiment_cancelled`, grades it as an execution failure, and returns a run with `status="cancelled"`. Unstarted pair slots remain empty so partial work is visible. Execution is sequential; this scheduler makes no distributed or resumable-run claim.
 
-`run_experiment` performs execution and per-attempt grading. Research comparison totals and saved artifacts are added in RF-24 and Milestone 07 respectively. The committed ESI cases are fabricated software examples and are not clinical evidence.
+`run_experiment` performs execution and per-attempt grading. The comparison report and saved artifacts carry the selected `runtime_profile` and registered grader ID, with each role's effective policy in the attempt record. The committed ESI cases are fabricated software examples and are not clinical evidence.

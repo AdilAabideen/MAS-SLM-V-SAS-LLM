@@ -73,10 +73,11 @@ For the preserved vLLM adapter it shows both configured model settings and
 the effective request values, including the legacy 250-token cap when
 `request_policy: legacy_v1` is selected.
 
-`agents.<alias>.runtime` can set `max_model_calls`, `max_tool_calls_total`, and
+Top-level `runtime_profile` selects `legacy_v1`, `strict_v1`, or
+`slm_assisted_v1`; see [POLICIES.md](POLICIES.md). `agents.<alias>.runtime` can set `max_model_calls`, `max_tool_calls_total`, and
 `max_elapsed_seconds` for a case's agent loop. MAS can additionally set
 `mas.max_handoffs` and `mas.max_elapsed_seconds` for the whole graph. Limits
 must be positive; when absent, the preserved legacy runtime remains unbounded.
 Exhaustion produces a failed attempt with a budget or timeout reason and
-observed call counts, not a successful prediction. A future named strict
-profile will provide finite defaults without silently changing legacy runs.
+observed call counts, not a successful prediction. Strict and assisted
+profiles supply finite defaults without silently changing legacy runs.

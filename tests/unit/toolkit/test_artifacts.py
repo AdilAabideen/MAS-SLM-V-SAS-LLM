@@ -71,6 +71,10 @@ def test_round_trip_hashes_and_secret_scrubbing(tmp_path: Path, monkeypatch) -> 
     assert manifest["hashes"]["dataset"]
     assert manifest["source_revision"] is not None
     assert manifest["package_version"] == "0.0.0"
+    assert manifest["runtime_profile"] == "legacy_v1"
+    assert manifest["grader_id"] == "esi.final_acuity_v1"
+    assert report.runtime_profile == "legacy_v1"
+    assert report.grader_id == "esi.final_acuity_v1"
     (writer.directory / "summary.json").unlink()
     assert summarize_artifacts(writer.directory).to_dict() == report.to_dict()
     with pytest.raises(ArtifactError, match="summary.json"):
@@ -79,3 +83,24 @@ def test_round_trip_hashes_and_secret_scrubbing(tmp_path: Path, monkeypatch) -> 
         stream.write("{}\n")
     with pytest.raises(ArtifactError, match="hash mismatch"):
         summarize_artifacts(writer.directory)
+
+
+def test_version_one_manifest_remains_readable_with_unknown_grader_id(tmp_path: Path, monkeypatch) -> None:
+    loaded, dataset, run, report, env = _fixture_run(monkeypatch)
+    writer = ArtifactWriter(
+        directory=tmp_path / "legacy-manifest", loaded=loaded, dataset=dataset,
+        experiment_id=run.experiment_id, prices_by_role={}, environment=env,
+    )
+    for attempt in run.attempts:
+        writer.record_attempt(attempt)
+    writer.finalize(run, report)
+    manifest_path = writer.directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifact_version"] = 1
+    manifest.pop("runtime_profile")
+    manifest.pop("grader_id")
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    recovered = summarize_artifacts(writer.directory)
+    assert recovered.runtime_profile == "legacy_v1"
+    assert recovered.grader_id is None
+    assert recovered.systems["single"].attempted == 3

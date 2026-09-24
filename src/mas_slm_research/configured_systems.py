@@ -15,6 +15,7 @@ from .kernel import AgentKernel
 from .mas_contract import MASState
 from .multi_agent import MultiAgentRunner
 from .runtime.runtime_config import RuntimeConfig
+from .runtime.profiles import mas_budget_for_profile, runtime_config_for_profile
 from .single_agent import SingleAgentRunner
 from .workflows.definition import WorkflowDefinition
 
@@ -31,14 +32,9 @@ class ConfiguredSystems:
     workflow: WorkflowDefinition
 
 
-def _runtime_config(agent: AgentConfig, *, multi_agent: bool) -> RuntimeConfig:
-    values = asdict(RuntimeConfig(multi_agent=multi_agent))
-    if agent.runtime:
-        values.update(agent.runtime.model_dump(exclude_none=True))
-    values["multi_agent"] = multi_agent
-    values["persist_events"] = True
-    values["print_events"] = False
-    return RuntimeConfig(**values)
+def _runtime_config(agent: AgentConfig, *, multi_agent: bool, profile: str = "legacy_v1") -> RuntimeConfig:
+    overrides = agent.runtime.model_dump(exclude_none=True) if agent.runtime else {}
+    return runtime_config_for_profile(profile, multi_agent=multi_agent, overrides=overrides)
 
 
 def _kernel_from_definition(
@@ -128,7 +124,7 @@ def build_configured_systems(
         return _kernel_from_definition(
             sas_definition,
             model=construct_model(sas_model, spec.sas.agent),
-            runtime_config=_runtime_config(sas_agent, multi_agent=False),
+            runtime_config=_runtime_config(sas_agent, multi_agent=False, profile=spec.runtime_profile),
             workflow=None, handoff_schemas={}, registry=registry,
         )
 
@@ -164,7 +160,7 @@ def build_configured_systems(
             return _kernel_from_definition(
                 definition,
                 model=construct_model(effective_model, role),
-                runtime_config=_runtime_config(agent, multi_agent=True),
+                runtime_config=_runtime_config(agent, multi_agent=True, profile=spec.runtime_profile),
                 workflow=selected_workflow, handoff_schemas=handoff_schemas,
                 registry=registry,
             )
@@ -193,13 +189,14 @@ def build_configured_systems(
             raise ValueError(f"payload builder for {role!r} must return a dict with llm_payload")
         return payload
 
+    profile_handoffs, profile_elapsed = mas_budget_for_profile(spec.runtime_profile)
     mas_runner = MultiAgentRunner(
         workflow=selected_workflow,
         role_factories=role_factories,
         payload_builder=build_payload,
         output_validator=validate_final,
-        max_handoffs=spec.mas.max_handoffs,
-        max_elapsed_seconds=spec.mas.max_elapsed_seconds,
+        max_handoffs=spec.mas.max_handoffs if spec.mas.max_handoffs is not None else profile_handoffs,
+        max_elapsed_seconds=spec.mas.max_elapsed_seconds if spec.mas.max_elapsed_seconds is not None else profile_elapsed,
     )
     return ConfiguredSystems(
         sas_runner=sas_runner, mas_runner=mas_runner, sas_model=sas_model,

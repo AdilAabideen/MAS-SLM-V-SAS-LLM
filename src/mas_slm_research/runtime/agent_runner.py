@@ -309,10 +309,11 @@ class AgentRunner:
                 short_term_memory=short_term_memory,
                 retry_feedback=pending_retry_feedback,
             )
+            call_kind = "malformed_repair" if pending_retry_feedback is not None else "main_loop"
             pending_retry_feedback = None
 
             ai_msg = await self.ainvoke_with_telemetry(
-                call_kind="main_loop",
+                call_kind=call_kind,
                 iteration=iteration,
                 messages=call_messages,
                 invoke_fn=lambda: self.bound_model.ainvoke(call_messages),

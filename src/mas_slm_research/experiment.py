@@ -17,6 +17,7 @@ from .dataset import DatasetCase, LoadedDataset, load_configured_dataset
 from .grading import GradeResult, GraderLike, grade_case, require_grader
 from .multi_agent import MultiCaseExecution
 from .single_agent import SingleCaseExecution
+from .runtime.profiles import mas_budget_for_profile
 
 
 class ExperimentStatus(str, Enum):
@@ -63,6 +64,8 @@ class ExperimentRun:
     attempts: tuple[ExperimentAttempt, ...]
     pairs: tuple[ExperimentPair, ...]
     reporting_errors: tuple[str, ...] = ()
+    runtime_profile: str = "legacy_v1"
+    grader_id: str | None = None
 
 
 def _utc_now() -> str:
@@ -83,9 +86,16 @@ def _choices(loaded: LoadedConfiguration, systems: ConfiguredSystems, arm: str) 
         for role in aliases
     }
     policies = {
-        role: asdict(_runtime_config(loaded.experiment.agents[alias], multi_agent=arm == "multi"))
+        role: asdict(_runtime_config(loaded.experiment.agents[alias], multi_agent=arm == "multi", profile=loaded.experiment.runtime_profile))
         for role, alias in aliases.items()
     }
+    if arm == "multi":
+        default_handoffs, default_elapsed = mas_budget_for_profile(loaded.experiment.runtime_profile)
+        policies["__system__"] = {
+            "policy_id": loaded.experiment.runtime_profile,
+            "max_handoffs": getattr(systems.mas_runner, "max_handoffs", loaded.experiment.mas.max_handoffs or default_handoffs),
+            "max_elapsed_seconds": getattr(systems.mas_runner, "max_elapsed_seconds", loaded.experiment.mas.max_elapsed_seconds or default_elapsed),
+        }
     return choices, policies
 
 
@@ -192,6 +202,8 @@ async def run_experiment(
         attempts=recorded,
         pairs=_pairs(dataset.cases, loaded.experiment.repetitions, recorded),
         reporting_errors=tuple(reporting_errors),
+        runtime_profile=loaded.experiment.runtime_profile,
+        grader_id=loaded.experiment.grader,
     )
 
 
