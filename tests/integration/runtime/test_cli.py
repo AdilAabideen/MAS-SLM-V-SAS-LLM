@@ -11,7 +11,10 @@ import sys
 import time
 from pathlib import Path
 
-from mas_slm_research.cli import _execute, _parser
+from mas_slm_research.cli import _case_view, _execute, _parser
+from mas_slm_research.contracts import CaseResult, FailureKind, RunFailure, RunIdentity, RunStatus, RunTiming
+from mas_slm_research.grading import GradeStatus, grade_case
+from mas_slm_research.evaluation.esi_final_acuity import ESIFinalAcuityGrader
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -19,6 +22,22 @@ CONFIG = ROOT / "examples" / "esi" / "experiment.yaml"
 FIXTURE = ROOT / "examples" / "esi" / "offline_fixture.json"
 DR7_CONFIG = ROOT / "examples" / "esi" / "experiment-dr7.yaml"
 DR7_FIXTURE = ROOT / "examples" / "esi" / "offline_fixture_openai_dr7.json"
+
+
+def test_case_view_keeps_failure_details_without_repeating_identity() -> None:
+    identity = RunIdentity(experiment_id="test", system_id="multi", case_id="c1", repetition=1, run_id="r1")
+    result = CaseResult(
+        identity=identity, status=RunStatus.FAILED,
+        failure=RunFailure(kind=FailureKind.PROVIDER, message="provider unavailable"),
+        timing=RunTiming(wall_seconds=0.1),
+    )
+    grade = grade_case(ESIFinalAcuityGrader(), expected={"acuity": 1}, result=result)
+    view = _case_view(result, grade)
+    assert view["result"]["failure"] == {"kind": "provider", "message": "provider unavailable"}
+    assert "identity" not in view["grade"]
+    assert view["grade"]["status"] == GradeStatus.EXECUTION_FAILED.value
+    assert view["grade"]["error"] == "provider unavailable"
+    assert view["grade"]["execution_failure_kind"] == "provider"
 
 
 def _dotenv_experiment(tmp_path: Path) -> Path:
@@ -129,6 +148,10 @@ def test_run_compare_and_summarize_scripted_clone_fixture(tmp_path: Path) -> Non
     single_data = json.loads(single.stdout)
     assert single_data["result"]["status"] == "completed"
     assert single_data["grade"]["passed"] is False
+    assert "identity" in single_data["result"] and "identity" not in single_data["grade"]
+    assert "failure" not in single_data["result"]
+    assert "error" not in single_data["grade"]
+    assert "execution_failure_kind" not in single_data["grade"]
 
     multi = _cli("run", *options, "--system", "multi", "--case", "synthetic-esi1-001")
     assert multi.returncode == 0

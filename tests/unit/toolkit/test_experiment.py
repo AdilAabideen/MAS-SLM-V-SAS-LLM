@@ -16,7 +16,7 @@ from mas_slm_research.contracts import (
 )
 from mas_slm_research.dataset import DatasetError, load_configured_dataset
 from mas_slm_research.experiment import ExperimentStatus, run_configured_experiment, run_experiment
-from mas_slm_research.grading import GradeDecision
+from mas_slm_research.grading import BaseGrader, GradeDecision
 from mas_slm_research.registry import ComponentRegistry, register_builtin_components
 
 
@@ -30,7 +30,7 @@ ENV = {
 }
 
 
-class _Grader:
+class _Grader(BaseGrader):
     def validate_expected(self, expected):
         assert isinstance(expected["acuity"], int)
 

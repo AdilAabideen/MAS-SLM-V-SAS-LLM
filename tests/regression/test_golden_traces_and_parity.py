@@ -9,7 +9,6 @@ from langchain_core.messages import AIMessage
 from pydantic import BaseModel
 
 from mas_slm_research.kernel import AgentKernel
-from mas_slm_research.evaluation.legacy_vitals import VitalsUptriageEvaluator
 from mas_slm_research.protocols.tool_call_recovery import (
     looks_like_malformed_tool_call_content,
     recover_tool_calls_from_content,
@@ -126,18 +125,3 @@ def test_reg_007_dr7_and_llama_payload_fixtures_have_equivalent_tool_call_semant
     llama_call = normalize_tool_calls(llama, allowed_tool_names={"lookup_value"})[0]
     assert dr7_call["name"] == llama_call["name"] == "lookup_value"
     assert dr7_call["args"] == llama_call["args"] == {"value": "abc"}
-
-
-@pytest.mark.regression
-@pytest.mark.agent_cases
-def test_reg_008_vitals_fixed_uptriage_case_remains_positive():
-    """Handle reg 008 vitals fixed uptriage case remains positive."""
-    # Keep the main step clear.
-    evaluator = VitalsUptriageEvaluator()
-    result = evaluator.evaluate(
-        {"recommendation": {"consider_uptriage": True}},
-        {"recommendation": {"consider_uptriage": True}},
-        agent_status="succeeded",
-    )
-    assert result.passed is True
-    assert result.metrics_json["confusion"] == "tp"

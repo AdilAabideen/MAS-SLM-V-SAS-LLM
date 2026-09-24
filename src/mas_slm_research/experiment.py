@@ -14,7 +14,7 @@ from .configuration import LoadedConfiguration
 from .configured_systems import ConfiguredSystems, ModelFactory, _runtime_config, build_configured_systems
 from .contracts import CaseResult, FailureKind, RunFailure, RunIdentity, RunStatus, RunTiming
 from .dataset import DatasetCase, LoadedDataset, load_configured_dataset
-from .grading import GradeResult, GraderLike, grade_case, require_grader
+from .grading import BaseGrader, GradeResult, grade_case
 from .multi_agent import MultiCaseExecution
 from .single_agent import SingleCaseExecution
 from .runtime.profiles import mas_budget_for_profile
@@ -127,14 +127,13 @@ def _pairs(cases: tuple[DatasetCase, ...], repetitions: int, attempts: tuple[Exp
 
 async def run_experiment(
     loaded: LoadedConfiguration, *, dataset: LoadedDataset, systems: ConfiguredSystems,
-    grader: GraderLike, experiment_id: str | None = None,
+    grader: BaseGrader, experiment_id: str | None = None,
     cancel_requested: Callable[[], bool] | None = None,
     on_attempt: Callable[[ExperimentAttempt], None] | None = None,
     on_case_start: Callable[[str, str, int], None] | None = None,
     on_event: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> ExperimentRun:
     """Run all selected cases sequentially, retaining each failed arm and grade."""
-    grader = require_grader(grader)
     if not dataset.cases:
         raise ValueError("experiment dataset must contain cases")
     for case in dataset.cases:
@@ -234,7 +233,7 @@ async def run_configured_experiment(
 ) -> ExperimentRun:
     """Perform all dataset preflight checks before building or invoking models."""
     dataset = load_configured_dataset(loaded)
-    grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
+    grader = loaded.registry.resolve("graders", loaded.experiment.grader)
     systems = build_configured_systems(loaded, model_factory=model_factory, environment=environment)
     return await run_experiment(
         loaded, dataset=dataset, systems=systems, grader=grader,

@@ -19,10 +19,10 @@ from .artifacts import ArtifactError, ArtifactWriter, summarize_artifacts
 from .console import ConsoleRenderer
 from .configuration import ConfigurationError, load_configuration
 from .configured_systems import build_configured_systems
-from .contracts import RunIdentity
+from .contracts import CaseResult, RunIdentity
 from .dataset import DatasetError, load_configured_dataset
 from .experiment import run_configured_experiment
-from .grading import grade_case, require_grader
+from .grading import GradeResult, grade_case
 from .preview import inspect_configuration
 from .registry import ComponentRegistry, register_builtin_components
 from .tracing import trace_case_execution, trace_experiment
@@ -32,6 +32,19 @@ EXIT_OK = 0
 EXIT_INVALID_INPUT = 2
 EXIT_INFRASTRUCTURE = 3
 EXIT_INTERRUPTED = 130
+
+
+def _case_view(result: CaseResult, grade: GradeResult) -> dict[str, Any]:
+    """Keep one-case CLI JSON readable; artifact records retain full fields."""
+    execution = result.to_dict()
+    if execution["failure"] is None:
+        del execution["failure"]
+    judgment = grade.to_dict()
+    del judgment["identity"]
+    for optional in ("diagnostics", "error", "execution_failure_kind"):
+        if not judgment[optional]:
+            del judgment[optional]
+    return {"result": execution, "grade": judgment}
 
 
 class _ScriptedModel:
@@ -190,7 +203,7 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         dataset = load_configured_dataset(loaded, case_ids=(args.case,))
         case = dataset.cases[0]
         systems = build_configured_systems(loaded, model_factory=model_factory, environment=environment)
-        grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
+        grader = loaded.registry.resolve("graders", loaded.experiment.grader)
         assert renderer is not None
         def show_event(source, event):
             show_console(renderer.render_event, source, event)
@@ -218,7 +231,7 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
                 print(f"tracing: {len(trace.spans)} spans captured", file=sys.stderr)
             for warning in trace.warnings:
                 print(f"tracing warning: {warning}", file=sys.stderr)
-            results[system_id] = {"result": execution.result.to_dict(), "grade": grade.to_dict()}
+            results[system_id] = _case_view(execution.result, grade)
         if len(selected) == 1:
             return results[selected[0]]
         return {"case_id": case.case_id, **results}
@@ -271,7 +284,7 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
             print(f"tracing: {len(trace.spans)} spans captured", file=sys.stderr)
         for warning in trace.warnings:
             print(f"tracing warning: {warning}", file=sys.stderr)
-        grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
+        grader = loaded.registry.resolve("graders", loaded.experiment.grader)
         report = compare_experiment(run, grader=grader, prices_by_role=prices)
         if writer is not None:
             try:

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from mas_slm_research.agents.definition import AgentDefinition
 from mas_slm_research.configuration import load_configuration
 from mas_slm_research.configured_systems import build_configured_systems
+from mas_slm_research.evaluation.esi_final_acuity import ESIFinalAcuityGrader
 from mas_slm_research.handoff import HandoffDefinition, create_handoff_tools
 from mas_slm_research.kernel import AgentKernel
 from mas_slm_research.preview import inspect_configuration
@@ -178,7 +179,7 @@ def test_small_external_workflow_previews_its_own_agents_and_gate(tmp_path: Path
     registry.register("schemas", "toy.handoff", ToyHandoff)
     registry.register("payload_builders", "toy.payload", lambda state: {"llm_payload": {"case_info": state.get("case_info")}})
     registry.register("dataset_loaders", "toy.dataset", lambda path: [])
-    registry.register("graders", "toy.grade", lambda: None)
+    registry.register("graders", "toy.grade", ESIFinalAcuityGrader)
 
     loaded = load_configuration(experiment_path, registry=registry, environment={})
     preview = inspect_configuration(loaded)

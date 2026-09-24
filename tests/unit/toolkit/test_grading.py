@@ -4,18 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from mas_slm_research.evaluation.legacy_single_agent_acuity import SingleAgentAcuityEvaluator as LegacyESI
-from mas_slm_research.evaluation.legacy_esi1 import ES1AcuityEvaluator
-from mas_slm_research.evaluation.legacy_doctor import DoctorAlwaysPassEvaluator
 from mas_slm_research.contracts import (
     CaseResult, FailureKind, RunFailure, RunIdentity, RunStatus, RunTiming, ValidatedOutput,
 )
-from mas_slm_research.evaluation.esi_final_acuity import ESIFinalAcuityGrader, LEGACY_DOCTOR_DIAGNOSTIC
-from mas_slm_research.evaluation.diagnostics import (
-    aggregate_legacy_diagnostics, evaluate_legacy_diagnostic,
-)
+from mas_slm_research.evaluation.esi_final_acuity import ESIFinalAcuityGrader
 from mas_slm_research.grading import (
-    BaseGrader, GradeDecision, GradeStatus, aggregate_grades, grade_case, require_grader,
+    BaseGrader, GradeDecision, GradeStatus, grade_case,
 )
 from mas_slm_research.registry import ComponentRegistry, register_builtin_components
 
@@ -52,8 +46,8 @@ class ToyGrader(BaseGrader):
         return {"attempts": len(results), "correct": sum(item.passed is True for item in results)}
 
 
-def test_external_subclass_and_structural_grader_distinguish_outcomes() -> None:
-    grader = require_grader(ToyGrader)
+def test_grader_distinguishes_outcomes_and_allows_custom_summary() -> None:
+    grader = ToyGrader()
     correct = grade_case(grader, expected={"answer": "yes"}, result=_case({"answer": "yes"}))
     incorrect = grade_case(grader, expected={"answer": "yes"}, result=_case({"answer": "no"}))
     missing = grade_case(grader, expected={"answer": "yes"}, result=_case({}))
@@ -69,57 +63,65 @@ def test_external_subclass_and_structural_grader_distinguish_outcomes() -> None:
     assert grader_error.status == GradeStatus.GRADER_ERROR
     assert grader_error.score is None
     assert label_error.status == GradeStatus.GRADER_ERROR
-    assert aggregate_grades(grader, [correct, incorrect, execution, grader_error]) == {
+    assert grader.aggregate([correct, incorrect, execution, grader_error]) == {
         "attempts": 4, "correct": 1,
     }
 
-    class Structural:
-        validate_expected = ToyGrader.validate_expected
-        evaluate = ToyGrader.evaluate
-        aggregate = ToyGrader.aggregate
 
-    assert grade_case(require_grader(Structural()), expected={"answer": "x"}, result=_case({"answer": "x"})).passed
-    class Incomplete:
-        validate_expected = ToyGrader.validate_expected
-        evaluate = ToyGrader.evaluate
+def test_minimal_grader_uses_default_validation_and_summary() -> None:
+    class MinimalGrader(BaseGrader):
+        def evaluate(self, expected, actual):
+            passed = actual.get("answer") == expected["answer"]
+            return GradeDecision(passed=passed, score=float(passed))
 
-    with pytest.raises(TypeError, match="aggregate"):
-        require_grader(Incomplete())
+    grader = MinimalGrader()
+    correct = grade_case(grader, expected={"answer": "yes"}, result=_case({"answer": "yes"}))
+    failed = grade_case(grader, expected={"answer": "yes"}, result=_case(failed=True))
+    invalid_label = grade_case(grader, expected={}, result=_case({"answer": "yes"}))
+    assert grader.aggregate([correct, failed, invalid_label]) == {
+        "attempted": 3, "graded": 1, "passed": 1, "execution_failed": 1,
+        "grader_errors": 1, "accuracy_all_attempts": 0.3333, "accuracy_graded": 1.0,
+    }
 
 
-@pytest.mark.parametrize("actual", [
-    {"final_esi_level": 2}, {"final_esi_level": 3},
-    {"final_esi_level": "invalid"}, {},
+@pytest.mark.parametrize(("actual", "passed", "predicted", "invalid"), [
+    ({"final_esi_level": 2}, True, 2, False),
+    ({"final_esi_level": 3}, False, 3, False),
+    ({"final_esi_level": "2"}, True, 2, False),
+    ({"acuity": 2}, True, 2, False),
+    ({"final_esi_level": "invalid"}, False, None, True),
+    ({"final_esi_level": 6}, False, 6, True),
+    ({}, False, None, True),
 ])
-def test_esi_grader_matches_preserved_final_acuity_evaluator(actual) -> None:
+def test_esi_grader_scores_final_acuity_for_either_system(actual, passed, predicted, invalid) -> None:
     grader = ESIFinalAcuityGrader()
-    legacy = LegacyESI().evaluate({"acuity": 2}, actual, agent_status="succeeded")
     result = grade_case(grader, expected={"acuity": 2}, result=_case(actual, system="multi"))
     assert result.status == GradeStatus.GRADED
-    assert result.passed == legacy.passed
-    assert result.score == legacy.score
-    assert result.diagnostics["legacy_diff"] == legacy.diff_json
-    assert result.diagnostics["legacy_metrics"] == legacy.metrics_json
+    assert result.passed is passed
+    assert result.score == float(passed)
+    assert result.diagnostics == {
+        "expected_acuity": 2,
+        "predicted_acuity": predicted,
+        "invalid_prediction": invalid,
+    }
 
 
-def test_esi_final_score_uses_both_systems_and_labels_doctor_placeholder() -> None:
+def test_esi_final_score_uses_both_systems() -> None:
     registry = ComponentRegistry()
     register_builtin_components(registry)
-    grader = require_grader(registry.resolve("graders", "esi.final_acuity_v1"))
+    grader = registry.resolve("graders", "esi.final_acuity_v1")
     grades = [
         grade_case(grader, expected={"acuity": 2}, result=_case({"final_esi_level": 2}, system="single")),
         grade_case(grader, expected={"acuity": 2}, result=_case({"final_esi_level": 3}, system="multi")),
         grade_case(grader, expected={"acuity": 2}, result=_case(failed=True, system="multi")),
     ]
-    summary = aggregate_grades(grader, grades)
+    summary = grader.aggregate(grades)
     assert summary["attempted"] == 3
     assert summary["graded"] == 2
     assert summary["passed"] == 1
     assert summary["execution_failed"] == 1
     assert summary["accuracy_all_attempts"] == 0.3333
     assert summary["accuracy_graded"] == 0.5
-    assert summary["doctor_diagnostic"] == LEGACY_DOCTOR_DIAGNOSTIC
-    assert summary["doctor_diagnostic"]["headline_final_task_grader"] is False
 
 
 def test_esi_invalid_label_is_not_a_wrong_prediction() -> None:
@@ -129,24 +131,7 @@ def test_esi_invalid_label_is_not_a_wrong_prediction() -> None:
     assert "expected-label validation" in result.error
 
 
-def test_legacy_specialist_and_doctor_diagnostics_stay_outside_headline_grade() -> None:
-    specialist = ES1AcuityEvaluator()
-    diagnostic = evaluate_legacy_diagnostic(
-        specialist, agent_name="esi1_agent", expected={"acuity": 1},
-        actual={"is_esi1": True}, agent_status="succeeded",
-    )
-    assert diagnostic.passed is True
-    assert diagnostic.placeholder is False
-    assert aggregate_legacy_diagnostics(specialist, [diagnostic])["diagnostic_only"] is True
-
-    doctor = DoctorAlwaysPassEvaluator()
-    placeholder = evaluate_legacy_diagnostic(
-        doctor, agent_name="doctor_agent", expected={}, actual=None, agent_status="failed",
-    )
-    assert placeholder.passed is True  # Preserved legacy behavior, not task accuracy.
-    assert placeholder.placeholder is True
-    assert aggregate_legacy_diagnostics(doctor, [placeholder])["placeholder"] is True
-
+def test_failed_multi_run_is_not_graded_as_a_correct_final_answer() -> None:
     final_grade = grade_case(
         ESIFinalAcuityGrader(), expected={"acuity": 1}, result=_case(failed=True, system="multi"),
     )

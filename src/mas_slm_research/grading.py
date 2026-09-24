@@ -7,7 +7,7 @@ import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
+from typing import Any, Mapping, Sequence
 
 from .contracts import CaseResult, FailureKind, RunIdentity, RunStatus
 
@@ -80,44 +80,39 @@ class GradeResult:
         }
 
 
-@runtime_checkable
-class GraderLike(Protocol):
-    """Structural protocol for registered graders, including external objects."""
-
-    def validate_expected(self, expected: Mapping[str, Any]) -> None: ...
-
-    def evaluate(self, expected: Mapping[str, Any], actual: Mapping[str, Any]) -> GradeDecision: ...
-
-    def aggregate(self, results: Sequence[GradeResult]) -> Mapping[str, Any]: ...
-
-
 class BaseGrader(ABC):
-    """Subclass this to supply a new task's label, case, and summary policy."""
+    """Subclass and implement evaluate; override validation or summary as needed."""
 
-    @abstractmethod
+    label_name: str | None = None
+
     def validate_expected(self, expected: Mapping[str, Any]) -> None:
-        """Raise if a label cannot be graded."""
+        """Require at least one expected label before running a case."""
+        if not expected:
+            raise ValueError("expected label must not be empty")
 
     @abstractmethod
     def evaluate(self, expected: Mapping[str, Any], actual: Mapping[str, Any]) -> GradeDecision:
         """Grade only a completed, validated system output."""
 
-    @abstractmethod
     def aggregate(self, results: Sequence[GradeResult]) -> Mapping[str, Any]:
-        """Aggregate case-grade records without losing failed attempts."""
+        """Count all attempts while keeping grader errors separate from failures."""
+        grades = tuple(results)
+        attempted = len(grades)
+        graded = sum(item.status == GradeStatus.GRADED for item in grades)
+        passed = sum(item.passed is True for item in grades)
+        return {
+            **({"label": self.label_name} if self.label_name else {}),
+            "attempted": attempted,
+            "graded": graded,
+            "passed": passed,
+            "execution_failed": sum(item.status == GradeStatus.EXECUTION_FAILED for item in grades),
+            "grader_errors": sum(item.status == GradeStatus.GRADER_ERROR for item in grades),
+            "accuracy_all_attempts": round(passed / attempted, 4) if attempted else None,
+            "accuracy_graded": round(passed / graded, 4) if graded else None,
+        }
 
 
-def require_grader(value: Any) -> GraderLike:
-    """Accept subclasses and compatible objects while rejecting incomplete hooks."""
-    if isinstance(value, type):
-        value = value()
-    for method in ("validate_expected", "evaluate", "aggregate"):
-        if not callable(getattr(value, method, None)):
-            raise TypeError(f"grader must implement {method}()")
-    return value
-
-
-def grade_case(grader: GraderLike, *, expected: Mapping[str, Any], result: CaseResult) -> GradeResult:
+def grade_case(grader: BaseGrader, *, expected: Mapping[str, Any], result: CaseResult) -> GradeResult:
     """Adapt a common SAS/MAS result into a distinct grade outcome."""
     try:
         grader.validate_expected(expected)
@@ -147,11 +142,3 @@ def grade_case(grader: GraderLike, *, expected: Mapping[str, Any], result: CaseR
         identity=result.identity, status=GradeStatus.GRADED,
         passed=decision.passed, score=decision.score, diagnostics=decision.diagnostics,
     )
-
-
-def aggregate_grades(grader: GraderLike, results: Sequence[GradeResult]) -> Mapping[str, Any]:
-    """Use the registered grader aggregation hook on all recorded attempts."""
-    summary = grader.aggregate(results)
-    if not isinstance(summary, Mapping):
-        raise TypeError("aggregate() must return a mapping")
-    return dict(summary)

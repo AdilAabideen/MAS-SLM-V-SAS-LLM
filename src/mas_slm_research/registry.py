@@ -13,6 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from .grading import BaseGrader
 from .model_registry import ModelSpec
 from .workflows.definition import WorkflowDefinition
 
@@ -31,8 +32,7 @@ class ComponentRegistry:
     """Own explicit component IDs for one experiment or preview.
 
     Providers, agent definitions, payload builders and dataset loaders are
-    callable factories. A grader can be a class or object with ``evaluate``
-    and ``aggregate``; its exact grading contract is defined at RF-21.
+    callable factories. Graders subclass BaseGrader.
     """
 
     def __init__(self) -> None:
@@ -49,6 +49,8 @@ class ComponentRegistry:
         if identifier in self._items[kind]:
             raise ValueError(f"Duplicate {kind} component ID {identifier!r}")
         self._validate_component(kind, identifier, component)
+        if kind == "graders" and isinstance(component, type):
+            component = component()
         self._items[kind][identifier] = component
 
     @staticmethod
@@ -60,10 +62,8 @@ class ComponentRegistry:
         elif kind == "models":
             valid = isinstance(component, ModelSpec) or callable(component)
         elif kind == "graders":
-            valid = callable(component) or (
-                callable(getattr(component, "evaluate", None))
-                and callable(getattr(component, "aggregate", None))
-            )
+            valid = (isinstance(component, type) and issubclass(component, BaseGrader)
+                     and not getattr(component, "__abstractmethods__", None)) or isinstance(component, BaseGrader)
         elif kind == "agents":
             valid = callable(component) or callable(getattr(component, "build_kernel", None))
         elif kind == "tools":

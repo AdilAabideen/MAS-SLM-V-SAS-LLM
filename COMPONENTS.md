@@ -40,10 +40,11 @@ The built-in dataset loaders are `jsonl` and `esi.jsonl_v1`. A registered
 loader receives a local path and yields case records with separate `input`
 and `expected` fields; see [`DATASETS.md`](DATASETS.md).
 
-The grader contract is now `BaseGrader` or a structurally compatible object
-with the same three methods. See [`GRADING.md`](GRADING.md). The built-in
-`esi.final_acuity_v1` grader scores the same final task for both systems;
-legacy specialist and doctor diagnostics do not become headline accuracy.
+The grader contract is `BaseGrader`: implement `evaluate` and optionally
+override label validation or aggregation. See [`GRADING.md`](GRADING.md). The built-in
+`esi.final_acuity_v1` grader scores the same final task for both systems.
+Intermediate specialist decisions remain visible in traces but have no
+separate built-in evaluators.
 
 An `AgentDefinition.build_kernel` method receives the selected `model`,
 `runtime_config`, resolved `workflow` (or `None` for SAS), route-to-schema

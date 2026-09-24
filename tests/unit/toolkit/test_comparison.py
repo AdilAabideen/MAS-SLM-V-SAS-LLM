@@ -16,7 +16,7 @@ from mas_slm_research.contracts import (
 from mas_slm_research.experiment import (
     ExperimentAttempt, ExperimentPair, ExperimentRun, ExperimentStatus,
 )
-from mas_slm_research.grading import GradeResult, GradeStatus
+from mas_slm_research.grading import BaseGrader, GradeResult, GradeStatus
 from mas_slm_research.registry import ComponentRegistry, register_builtin_components
 
 
@@ -123,7 +123,7 @@ def test_grader_summary_receives_failures_and_inconsistent_pairs_are_rejected() 
         dataset_path="synthetic.jsonl", started_at="start", ended_at="end",
         attempts=(attempt,), pairs=(ExperimentPair(case_id="a", repetition=1, single=attempt, multi=None),),
     )
-    class Grader:
+    class Grader(BaseGrader):
         def validate_expected(self, expected): pass
         def evaluate(self, expected, actual): raise AssertionError("not used")
         def aggregate(self, results): return {"statuses": [item.status.value for item in results]}
