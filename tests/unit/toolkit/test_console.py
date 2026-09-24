@@ -7,7 +7,7 @@ import io
 from mas_slm_research.console import ConsoleRenderer
 
 
-def test_secret_fields_are_redacted_and_lines_wrap(monkeypatch) -> None:
+def test_tool_call_json_is_multiline_and_secret_fields_are_redacted(monkeypatch) -> None:
     stream = io.StringIO()
     renderer = ConsoleRenderer(mode="full", color="never", stream=stream, width=48)
     renderer._event("agent_event", {
@@ -16,10 +16,12 @@ def test_secret_fields_are_redacted_and_lines_wrap(monkeypatch) -> None:
                                   "details": "many words in a long synthetic argument"}},
     })
     value = stream.getvalue()
-    assert "[specialist] tool_call example" in value
+    assert "[Tool call] example" in value
+    assert "\n  {\n" in value
     assert value.count("\n") >= 3
     assert "do-not-print" not in value and "hidden" not in value
     assert "[redacted]" in value
+    assert "tool_result" not in value
 
 
 def test_no_color_environment_wins_over_forced_color(monkeypatch) -> None:

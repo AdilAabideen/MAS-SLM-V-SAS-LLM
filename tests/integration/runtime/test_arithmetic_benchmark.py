@@ -48,10 +48,10 @@ def test_arithmetic_cli_routes_tools_handoffs_gate_and_artifacts(tmp_path: Path)
     assert report["systems"]["multi"]["passed"] == 1
     assert report["ties"] == 1
     assert report["uncomparable_pairs"] == 0
-    for event in ("tool_call sum_numbers", "handoff_created -> final_agent",
-                  "gate_evaluated final_gate ready=True", "[final_agent] agent_completed"):
+    for event in ("[Tool call] sum_numbers", "Handoff: adder_agent → final_agent",
+                  "Gate: final_gate | ready=True", "Agent: final_agent"):
         assert event in compared.stderr
-    assert "[adder_agent]" in compared.stderr and "[checker_agent]" in compared.stderr
+    assert "Agent: adder_agent" in compared.stderr and "Agent: checker_agent" in compared.stderr
     assert (output / "manifest.json").is_file()
     assert (output / "results.jsonl").is_file()
     assert (output / "events.jsonl").is_file()

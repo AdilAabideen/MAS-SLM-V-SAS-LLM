@@ -7,14 +7,14 @@ The tracked [`examples/esi/offline_fixture.json`](examples/esi/offline_fixture.j
 ```sh
 PYTHONPATH=src python -m mas_slm_research.cli validate examples/esi/experiment.yaml --fixture examples/esi/offline_fixture.json
 PYTHONPATH=src python -m mas_slm_research.cli inspect examples/esi/experiment.yaml --fixture examples/esi/offline_fixture.json
-PYTHONPATH=src python -m mas_slm_research.cli run examples/esi/experiment.yaml --fixture examples/esi/offline_fixture.json --system single --case synthetic-esi1-001
+PYTHONPATH=src python -m mas_slm_research.cli run examples/esi/experiment.yaml --fixture examples/esi/offline_fixture.json --case synthetic-esi1-001 --console full
 PYTHONPATH=src python -m mas_slm_research.cli compare examples/esi/experiment.yaml --fixture examples/esi/offline_fixture.json --no-artifacts > /tmp/esi-report.json
 PYTHONPATH=src python -m mas_slm_research.cli summarize /tmp/esi-report.json
 PYTHONPATH=src python -m mas_slm_research.cli compare examples/esi/experiment.yaml --fixture examples/esi/offline_fixture.json --output-dir /tmp/esi-artifact-run --console summary
 PYTHONPATH=src python -m mas_slm_research.cli summarize /tmp/esi-artifact-run
 ```
 
-`validate` checks the full YAML/workflow/dataset/label contract before inference. `inspect --details` includes the assembled prompts and tool schemas. Both commands use no model requests. `run` selects one `single` or `multi` system and one case ID, returning a terminal result and a distinct grade. `compare` uses the configured schedule and repetitions, returning a complete JSON comparison. `summarize` accepts either a captured report JSON or an artifact directory; the directory path recomputes totals from per-attempt records without model calls.
+`validate` checks the full YAML/workflow/dataset/label contract before inference. `inspect --details` includes the assembled prompts and tool schemas. Both commands use no model requests. `run --case ID` runs SAS first, then MAS on that one case. It returns both results and grades under `single` and `multi` in JSON. Add `--system single` or `--system multi` to run only one arm and retain the original single-result JSON shape. `compare` runs the full dataset with the configured schedule and repetitions, returning a complete JSON comparison. `summarize` accepts either a captured report JSON or an artifact directory; the directory path recomputes totals from per-attempt records without model calls.
 
 Exit code `0` means the command itself completed; an incorrect prediction or a recorded failed case remains a research result in its JSON. Exit code `2` means invalid configuration, dataset, fixture, case selection, or report input. Exit code `3` means an unhandled infrastructure failure outside the case runner. Exit code `130` means a keyboard interruption or cancelled comparison. Errors go to stderr; JSON data goes to stdout. `compare` saves portable artifacts in the configured output directory by default; use `--output-dir` for a new directory or `--no-artifacts` for JSON only. See [ARTIFACTS.md](ARTIFACTS.md).
 

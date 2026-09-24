@@ -134,6 +134,14 @@ def test_run_compare_and_summarize_scripted_clone_fixture(tmp_path: Path) -> Non
     assert multi.returncode == 0
     assert json.loads(multi.stdout)["grade"]["passed"] is True
 
+    paired = _cli("run", *options, "--case", "synthetic-esi1-001", "--console", "none")
+    assert paired.returncode == 0, paired.stderr
+    paired_data = json.loads(paired.stdout)
+    assert paired_data["case_id"] == "synthetic-esi1-001"
+    assert list(paired_data)[1:] == ["single", "multi"]
+    assert paired_data["single"]["grade"]["passed"] is False
+    assert paired_data["multi"]["grade"]["passed"] is True
+
     compared = _cli("compare", *options, "--no-artifacts")
     assert compared.returncode == 0
     report = json.loads(compared.stdout)
@@ -166,20 +174,25 @@ def test_console_trace_is_ordered_on_stderr_and_can_be_disabled() -> None:
     assert traced.returncode == quiet.returncode == 0
     assert json.loads(traced.stdout)["result"]["status"] == json.loads(quiet.stdout)["result"]["status"]
     assert quiet.stderr == ""
-    assert "[esi1_agent] tool_call" in traced.stderr
-    assert "[vitals_agent] tool_call" in traced.stderr
-    assert "handoff_created -> doctor_agent" in traced.stderr
-    assert "gate_evaluated doctor_gate ready=True" in traced.stderr
-    assert traced.stderr.count("handoff_created -> doctor_agent") == 2  # ESI-1 and vitals each hand off
-    assert traced.stderr.count("gate_evaluated doctor_gate ready=True") == 1
-    assert traced.stderr.index("[esi1_agent] agent_started") < traced.stderr.index("[doctor_agent] agent_started")
+    assert "MAS · multi-agent system" in traced.stderr
+    assert "Agent: esi1_agent" in traced.stderr
+    assert "Agent: vitals_agent" in traced.stderr
+    assert "[Tool call] final_esi1_true_handoff_to_doctor_agent" in traced.stderr
+    assert "Handoff: esi1_agent → doctor_agent" in traced.stderr
+    assert "Gate: doctor_gate | ready=True" in traced.stderr
+    assert traced.stderr.count("Handoff:") == 2  # ESI-1 and vitals each hand off
+    assert traced.stderr.count("Gate: doctor_gate") == 1
+    assert traced.stderr.index("Agent: esi1_agent") < traced.stderr.index("Agent: doctor_agent")
+    assert "tool_result" not in traced.stderr
     assert "\x1b[" not in traced.stderr
     assert "fixture-only" not in traced.stderr
 
     full = _cli("run", *options, "--console", "full", "--color", "never")
     assert full.returncode == 0
     assert '"is_esi1": true' in full.stderr
-    assert '"result"' in full.stderr
+    assert "\n  {\n" in full.stderr
+    assert "payload:" not in full.stderr
+    assert "tool_result" not in full.stderr
 
 
 def test_cli_trace_on_off_preserves_case_result() -> None:
@@ -209,7 +222,7 @@ def test_esi1_null_resources_finalizes_in_offline_cli(tmp_path: Path) -> None:
     assert report["grade"]["passed"] is True
 
 
-def test_console_emits_tool_result_before_case_finishes(tmp_path: Path) -> None:
+def test_console_emits_tool_call_before_case_finishes(tmp_path: Path) -> None:
     fixture = json.loads(DR7_FIXTURE.read_text(encoding="utf-8"))
     fixture["roles"]["baseline"].insert(0, {
         "tool_calls": [{"id": "plan", "name": "create_plan", "args": {
@@ -229,17 +242,17 @@ def test_console_emits_tool_result_before_case_finishes(tmp_path: Path) -> None:
     try:
         assert process.stderr is not None
         lines = []
-        while "tool_result create_plan" not in "".join(lines):
+        while "[Tool call] create_plan" not in "".join(lines):
             line = process.stderr.readline()
-            assert line, "CLI ended before printing the first tool result"
+            assert line, "CLI ended before printing the first tool call"
             lines.append(line)
-        assert process.poll() is None, "tool events were printed only after the case completed"
+        assert process.poll() is None, "tool calls were printed only after the case completed"
         stdout, stderr = process.communicate(timeout=10)
         assert process.returncode == 0, stderr
         all_events = "".join(lines) + stderr
-        assert all_events.count("tool_call create_plan") == 1
-        assert all_events.count("tool_result create_plan") == 1
-        assert all_events.index("tool_result create_plan") < all_events.index("final: ")
+        assert all_events.count("[Tool call] create_plan") == 1
+        assert "tool_result" not in all_events
+        assert all_events.index("[Tool call] create_plan") < all_events.index("Result: ")
         assert json.loads(stdout)["result"]["status"] == "completed"
     finally:
         if process.poll() is None:
