@@ -49,8 +49,8 @@ def test_external_extension_copies_inspects_and_runs(tmp_path: Path) -> None:
     assert report["systems"]["single"]["passed"] == 1
     assert report["systems"]["multi"]["passed"] == 1
     assert report["ties"] == 1
-    assert "handoff_created -> reviewer_agent" in compared.stderr
-    assert "gate_evaluated reviewer_gate ready=True" in compared.stderr
+    assert "Handoff: counter_agent → reviewer_agent" in compared.stderr
+    assert "Gate: reviewer_gate | ready=True" in compared.stderr
 
 
 def test_invalid_extension_registration_fails_before_inference(tmp_path: Path) -> None:

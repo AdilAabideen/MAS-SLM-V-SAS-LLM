@@ -124,7 +124,8 @@ def _parser() -> argparse.ArgumentParser:
         if name == "inspect":
             command.add_argument("--details", action="store_true", help="Include assembled prompts and tool schemas")
         if name == "run":
-            command.add_argument("--system", choices=("single", "multi"), required=True)
+            command.add_argument("--system", choices=("single", "multi", "both"), default="both",
+                                 help="System to run; default is SAS then MAS for this case")
             command.add_argument("--case", required=True, help="Case ID from the configured dataset")
         if name in {"run", "compare"}:
             command.add_argument("--console", choices=("none", "summary", "events", "full"),
@@ -190,27 +191,37 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         case = dataset.cases[0]
         systems = build_configured_systems(loaded, model_factory=model_factory, environment=environment)
         grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
-        identity = RunIdentity(experiment_id=str(uuid.uuid4()), system_id=args.system,
-                               case_id=case.case_id, repetition=1, run_id=str(uuid.uuid4()))
         assert renderer is not None
-        show_console(renderer.start_case, system_id=args.system, case_id=case.case_id, repetition=1)
         def show_event(source, event):
             show_console(renderer.render_event, source, event)
-        if args.system == "single":
-            execution = await systems.sas_runner.run_case(identity=identity, payload=case.agent_input(), on_event=show_event)
-        else:
-            execution = await systems.mas_runner.run_case(identity=identity, case_info=case.agent_input(), on_event=show_event)
-        grade = grade_case(grader, expected=case.expected_label(), result=execution.result)
-        show_console(renderer.finish_case, grade)
-        trace = trace_case_execution(
-            execution, grade=grade, config=trace_config,
-            environment=environment,
-        )
-        if trace.enabled:
-            print(f"tracing: {len(trace.spans)} spans captured", file=sys.stderr)
-        for warning in trace.warnings:
-            print(f"tracing warning: {warning}", file=sys.stderr)
-        return {"result": execution.result.to_dict(), "grade": grade.to_dict()}
+        experiment_id = str(uuid.uuid4())
+        selected = ("single", "multi") if args.system == "both" else (args.system,)
+        results: dict[str, Any] = {}
+        for system_id in selected:
+            identity = RunIdentity(experiment_id=experiment_id, system_id=system_id,
+                                   case_id=case.case_id, repetition=1, run_id=str(uuid.uuid4()))
+            baseline_alias = loaded.experiment.sas.agent if system_id == "single" else None
+            definition_id = loaded.experiment.agents[baseline_alias].definition if baseline_alias else None
+            show_console(renderer.start_case, system_id=system_id, case_id=case.case_id,
+                         repetition=1, agent_name=baseline_alias, agent_definition=definition_id)
+            if system_id == "single":
+                execution = await systems.sas_runner.run_case(identity=identity, payload=case.agent_input(), on_event=show_event)
+            else:
+                execution = await systems.mas_runner.run_case(identity=identity, case_info=case.agent_input(), on_event=show_event)
+            grade = grade_case(grader, expected=case.expected_label(), result=execution.result)
+            show_console(renderer.finish_case, grade, result=execution.result, expected=case.expected_label())
+            trace = trace_case_execution(
+                execution, grade=grade, config=trace_config,
+                environment=environment,
+            )
+            if trace.enabled:
+                print(f"tracing: {len(trace.spans)} spans captured", file=sys.stderr)
+            for warning in trace.warnings:
+                print(f"tracing warning: {warning}", file=sys.stderr)
+            results[system_id] = {"result": execution.result.to_dict(), "grade": grade.to_dict()}
+        if len(selected) == 1:
+            return results[selected[0]]
+        return {"case_id": case.case_id, **results}
     if args.command == "compare":
         assert renderer is not None
         output_dir = None if args.no_artifacts else args.output_dir or loaded.output_directory
@@ -231,10 +242,13 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         def observe(attempt):
             if writer is not None:
                 writer.record_attempt(attempt)
-            show_console(renderer.finish_case, attempt.grade)
+            show_console(renderer.finish_case, attempt.grade, result=attempt.result)
 
         def start_case(system_id, case_id, repetition):
-            show_console(renderer.start_case, system_id=system_id, case_id=case_id, repetition=repetition)
+            baseline_alias = loaded.experiment.sas.agent if system_id == "single" else None
+            definition_id = loaded.experiment.agents[baseline_alias].definition if baseline_alias else None
+            show_console(renderer.start_case, system_id=system_id, case_id=case_id,
+                         repetition=repetition, agent_name=baseline_alias, agent_definition=definition_id)
 
         def show_event(source, event):
             show_console(renderer.render_event, source, event)
