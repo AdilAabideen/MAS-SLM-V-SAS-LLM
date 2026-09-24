@@ -198,6 +198,8 @@ def build_configured_systems(
         role_factories=role_factories,
         payload_builder=build_payload,
         output_validator=validate_final,
+        max_handoffs=spec.mas.max_handoffs,
+        max_elapsed_seconds=spec.mas.max_elapsed_seconds,
     )
     return ConfiguredSystems(
         sas_runner=sas_runner, mas_runner=mas_runner, sas_model=sas_model,

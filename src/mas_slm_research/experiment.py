@@ -162,7 +162,7 @@ async def run_experiment(
             status = ExperimentStatus.CANCELLED
             result = CaseResult(
                 identity=identity, status=RunStatus.FAILED,
-                failure=RunFailure(kind=FailureKind.RUNTIME, message="experiment_cancelled"),
+                failure=RunFailure(kind=FailureKind.CANCELLED, message="experiment_cancelled"),
                 timing=RunTiming(wall_seconds=time.perf_counter() - attempt_clock),
             )
         except Exception as exc:

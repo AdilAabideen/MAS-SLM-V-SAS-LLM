@@ -58,3 +58,11 @@ JSON. The preview constructs the actual kernels with an inert model whose
 inference method raises if called; it never instantiates a registered provider.
 For the preserved vLLM adapter it shows both configured model settings and
 the current effective request values, including the known 250-token cap.
+
+`agents.<alias>.runtime` can set `max_model_calls`, `max_tool_calls_total`, and
+`max_elapsed_seconds` for a case's agent loop. MAS can additionally set
+`mas.max_handoffs` and `mas.max_elapsed_seconds` for the whole graph. Limits
+must be positive; when absent, the preserved legacy runtime remains unbounded.
+Exhaustion produces a failed attempt with a budget or timeout reason and
+observed call counts, not a successful prediction. A future named strict
+profile will provide finite defaults without silently changing legacy runs.

@@ -59,6 +59,9 @@ class RuntimePolicyConfig(_StrictSpec):
     max_malformed_tool_retries_per_tool: int | None = Field(default=None, ge=0)
     allow_plain_json_final_output: bool | None = None
     drop_extra_tool_calls: bool | None = None
+    max_model_calls: int | None = Field(default=None, ge=1)
+    max_tool_calls_total: int | None = Field(default=None, ge=1)
+    max_elapsed_seconds: float | None = Field(default=None, gt=0)
 
 
 class AgentConfig(_StrictSpec):
@@ -77,6 +80,8 @@ class MASConfig(_StrictSpec):
     agents: dict[str, str] = Field(min_length=1)
     model_overrides: dict[str, str] = Field(default_factory=dict)
     workflow: str = Field(min_length=1)
+    max_handoffs: int | None = Field(default=None, ge=1)
+    max_elapsed_seconds: float | None = Field(default=None, gt=0)
 
 
 class DatasetConfig(_StrictSpec):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import math
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
@@ -11,6 +13,7 @@ from .contracts import (
     TokenUsage, UsageSource, ValidatedOutput,
 )
 from .kernel import AgentKernel
+from .runtime.budget import BudgetExceeded
 from .mas.agent_node_executor import AgentNodeExecutor
 from .mas.execution_strategy import ExecutionRequest
 from .mas.gate_evaluator import GateEvaluator
@@ -48,11 +51,13 @@ class MultiCaseExecution:
 class _KernelRoleStrategy:
     mode = "kernel"
 
-    def __init__(self, *, workflow: WorkflowDefinition, roles: Mapping[str, AgentKernel], timeline: list[dict[str, Any]]) -> None:
+    def __init__(self, *, workflow: WorkflowDefinition, roles: Mapping[str, AgentKernel], timeline: list[dict[str, Any]], max_handoffs: int | None = None) -> None:
         self.workflow = workflow
         self.roles = roles
         self.child_traces: dict[str, _ChildTrace] = {}
         self.timeline = timeline
+        self.max_handoffs = max_handoffs
+        self.handoffs_used = 0
 
     async def execute(self, request: ExecutionRequest) -> AgentExecutionResult:
         role = request.agent_name
@@ -79,10 +84,14 @@ class _KernelRoleStrategy:
         kernel.add_event_handler(record_event)
         kernel.add_llm_call_handler(record_llm)
         kernel.add_tool_call_handler(record_tool)
-        raw = await kernel.ainvoke(request.pending_agent_payload["llm_payload"])
+        invocation = kernel.ainvoke(request.pending_agent_payload["llm_payload"])
+        raw = await asyncio.wait_for(invocation, timeout=kernel.runtime_config.max_elapsed_seconds) if kernel.runtime_config.max_elapsed_seconds else await invocation
 
         if isinstance(raw, Mapping) and isinstance(raw.get("handoff"), Mapping):
             handoff = HandoffEnvelope.model_validate(raw["handoff"]).validate_for(self.workflow)
+            self.handoffs_used += 1
+            if self.max_handoffs is not None and self.handoffs_used > self.max_handoffs:
+                raise BudgetExceeded(counter="handoffs", used=self.handoffs_used, limit=self.max_handoffs)
             output = raw.get("output")
             return AgentExecutionResult(
                 agent_name=role, status="handoff",
@@ -110,6 +119,8 @@ class MultiAgentRunner:
         payload_builder: PayloadBuilder,
         output_validator: OutputValidator,
         event_sink: Callable[[dict[str, Any]], None] | None = None,
+        max_handoffs: int | None = None,
+        max_elapsed_seconds: float | None = None,
     ) -> None:
         expected = set(workflow.participating_agents)
         actual = set(role_factories)
@@ -120,6 +131,15 @@ class MultiAgentRunner:
         self.payload_builder = payload_builder
         self.output_validator = output_validator
         self.event_sink = event_sink
+        if max_handoffs is not None and (isinstance(max_handoffs, bool) or not isinstance(max_handoffs, int) or max_handoffs < 1):
+            raise ValueError("max_handoffs must be a positive integer")
+        if max_elapsed_seconds is not None and (
+            isinstance(max_elapsed_seconds, bool) or not isinstance(max_elapsed_seconds, (int, float))
+            or not math.isfinite(max_elapsed_seconds) or max_elapsed_seconds <= 0
+        ):
+            raise ValueError("max_elapsed_seconds must be positive")
+        self.max_handoffs = max_handoffs
+        self.max_elapsed_seconds = max_elapsed_seconds
 
     async def run_case(self, *, identity: RunIdentity, case_info: Mapping[str, Any]) -> MultiCaseExecution:
         started = time.perf_counter()
@@ -144,7 +164,7 @@ class MultiAgentRunner:
                     raise TypeError(f"role '{name}' factory must return an extracted AgentKernel")
                 if not kernel.runtime_config.persist_events:
                     raise ValueError(f"role '{name}' must emit in-memory measurements")
-            strategy = _KernelRoleStrategy(workflow=self.workflow, roles=roles, timeline=timeline)
+            strategy = _KernelRoleStrategy(workflow=self.workflow, roles=roles, timeline=timeline, max_handoffs=self.max_handoffs)
             graph = MASGraphBuilder(
                 workflow=self.workflow,
                 agent_executor=AgentNodeExecutor(
@@ -153,14 +173,18 @@ class MultiAgentRunner:
                 ),
                 gate_evaluator=GateEvaluator(workflow=self.workflow, execution_tracker=tracker),
             ).build()
-            state = await graph.ainvoke(make_initial_mas_state(
+            invocation = graph.ainvoke(make_initial_mas_state(
                 dict(case_info), execution_context={
                     "mas_run_id": identity.run_id,
                     "workflow_id": self.workflow.metadata.workflow_id,
                     "workflow_version": self.workflow.metadata.version,
                 },
             ))
+            state = await asyncio.wait_for(invocation, timeout=self.max_elapsed_seconds) if self.max_elapsed_seconds else await invocation
             final_output = state.get("final_output")
+        except asyncio.CancelledError:
+            tracker.fail_unfinished(error_text="experiment_cancelled")
+            raise
         except Exception as exc:
             graph_error = exc
             tracker.fail_unfinished(error_text=str(exc) or type(exc).__name__)
@@ -178,12 +202,30 @@ class MultiAgentRunner:
         failure: RunFailure | None = None
         failed_children = [record for record in tracker.agent_records.values() if record.status == "failed"]
         if graph_error is not None:
-            failure = RunFailure(kind=FailureKind.RUNTIME, message=str(graph_error) or type(graph_error).__name__)
+            if isinstance(graph_error, BudgetExceeded):
+                kind = FailureKind.BUDGET
+            elif isinstance(graph_error, TimeoutError):
+                kind = FailureKind.TIMEOUT
+            elif any(call.get("error_text") for call in all_llm_calls):
+                kind = FailureKind.PROVIDER
+            else:
+                kind = FailureKind.RUNTIME
+            failure = RunFailure(kind=kind, message=str(graph_error) or type(graph_error).__name__)
         elif failed_children:
             provider_messages = [str(call["error_text"]) for call in all_llm_calls if call.get("error_text")]
             provider_error = bool(provider_messages)
             reason = provider_messages[0] if provider_error else (failed_children[0].error_text or "child_execution_failed")
-            failure = RunFailure(kind=FailureKind.PROVIDER if provider_error else FailureKind.RUNTIME, message=reason)
+            if "_budget_exceeded" in reason:
+                kind = FailureKind.BUDGET
+            elif "TimeoutError" in reason or "run_timeout_exceeded" in reason:
+                kind = FailureKind.TIMEOUT
+            elif provider_error:
+                kind = FailureKind.PROVIDER
+            elif any(call.get("error_text") for call in all_tool_calls):
+                kind = FailureKind.TOOL
+            else:
+                kind = FailureKind.RUNTIME
+            failure = RunFailure(kind=kind, message=reason)
         elif not isinstance(final_output, Mapping):
             failure = RunFailure(kind=FailureKind.VALIDATION, message="final_output_missing")
         else:

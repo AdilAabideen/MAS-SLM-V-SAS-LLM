@@ -305,5 +305,6 @@ def _error_text(output: Mapping[str, Any]) -> str | None:
     if not output:
         return None
     if output.get("error") is not None:
-        return str(output["error"])
+        detail = output.get("detail")
+        return f"{output['error']}: {detail}" if detail else str(output["error"])
     return json.dumps(dict(output), default=str)

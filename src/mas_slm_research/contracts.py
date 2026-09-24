@@ -24,6 +24,8 @@ class FailureKind(str, Enum):
     PROTOCOL = "protocol"
     VALIDATION = "validation"
     TIMEOUT = "timeout"
+    BUDGET = "budget"
+    CANCELLED = "cancelled"
     RUNTIME = "runtime"
 
 

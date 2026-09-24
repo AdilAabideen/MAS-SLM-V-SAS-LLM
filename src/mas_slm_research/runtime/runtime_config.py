@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import math
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,9 @@ class RuntimeConfig:
     short_term_memory_include_raw_provider_debug: bool = False
     short_term_memory_verbose: bool = False
     short_term_memory_log_token_estimates: bool = True
+    max_model_calls: int | None = None
+    max_tool_calls_total: int | None = None
+    max_elapsed_seconds: float | None = None
 
     def __post_init__(self) -> None:
         """Handle init."""
@@ -32,6 +36,17 @@ class RuntimeConfig:
             raise ValueError("max_tool_calls_per_turn must be >= 1.")
         if self.max_malformed_tool_retries_per_tool < 0:
             raise ValueError("max_malformed_tool_retries_per_tool must be >= 0.")
+        for name in ("max_model_calls", "max_tool_calls_total"):
+            value = getattr(self, name)
+            if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 1):
+                raise ValueError(f"{name} must be a positive integer when set")
+        if self.max_elapsed_seconds is not None and (
+            isinstance(self.max_elapsed_seconds, bool)
+            or not isinstance(self.max_elapsed_seconds, (int, float))
+            or not math.isfinite(self.max_elapsed_seconds)
+            or self.max_elapsed_seconds <= 0
+        ):
+            raise ValueError("max_elapsed_seconds must be positive when set")
 
     def to_dict(self) -> dict[str, object]:
         """Return a serializable dict for telemetry and experiment logging."""

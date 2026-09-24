@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
@@ -18,6 +19,7 @@ from .contracts import (
     ValidatedOutput,
 )
 from .kernel import AgentKernel
+from .runtime.budget import BudgetExceeded
 
 
 OutputValidator = Callable[[Mapping[str, Any]], Mapping[str, Any]]
@@ -67,7 +69,10 @@ class SingleAgentRunner:
             kernel.add_event_handler(events.append)
             kernel.add_llm_call_handler(llm_calls.append)
             kernel.add_tool_call_handler(tool_calls.append)
-            raw = await kernel.ainvoke(payload)
+            if kernel.runtime_config.max_elapsed_seconds is None:
+                raw = await kernel.ainvoke(payload)
+            else:
+                raw = await asyncio.wait_for(kernel.ainvoke(payload), timeout=kernel.runtime_config.max_elapsed_seconds)
 
             if not isinstance(raw, Mapping) or raw.get("ok") is not True or raw.get("error") is not None:
                 code = raw.get("error") if isinstance(raw, Mapping) else None
@@ -82,6 +87,8 @@ class SingleAgentRunner:
                     output = ValidatedOutput(value=value)
                 except Exception as exc:
                     failure = RunFailure(kind=FailureKind.VALIDATION, message=str(exc) or "output_validation_failed")
+        except BudgetExceeded as exc:
+            failure = RunFailure(kind=FailureKind.BUDGET, message=str(exc))
         except TimeoutError as exc:
             failure = RunFailure(kind=FailureKind.TIMEOUT, message=str(exc) or "run_timeout_exceeded")
         except Exception as exc:
