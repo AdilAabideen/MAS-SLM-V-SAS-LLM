@@ -24,6 +24,32 @@ def test_tool_call_json_is_multiline_and_secret_fields_are_redacted(monkeypatch)
     assert "tool_result" not in value
 
 
+def test_mas_tool_calls_name_the_agent_without_startup_agent_lines() -> None:
+    stream = io.StringIO()
+    renderer = ConsoleRenderer(mode="events", color="never", stream=stream)
+    renderer.start_case(system_id="multi", case_id="case-1", repetition=1)
+    renderer.render_event("graph_event", {"event_type": "agent_started", "agent_name": "vitals_agent"})
+    renderer.render_event("agent_event", {
+        "event_type": "tool_call", "agent_name": "vitals_agent", "tool_name": "create_plan",
+    })
+    lines = stream.getvalue().splitlines()
+    assert "Agent: vitals_agent | [Tool call] create_plan" in lines
+    assert "Agent: vitals_agent" not in lines
+
+
+def test_sas_tool_call_keeps_existing_label() -> None:
+    stream = io.StringIO()
+    renderer = ConsoleRenderer(mode="events", color="never", stream=stream)
+    renderer.start_case(system_id="single", case_id="case-1", repetition=1, agent_name="baseline")
+    renderer.render_event("agent_event", {
+        "event_type": "tool_call", "agent_name": "baseline", "tool_name": "create_plan",
+    })
+    lines = stream.getvalue().splitlines()
+    assert "Agent: baseline" in lines
+    assert "[Tool call] create_plan" in lines
+    assert "Agent: baseline | [Tool call] create_plan" not in lines
+
+
 def test_no_color_environment_wins_over_forced_color(monkeypatch) -> None:
     monkeypatch.setenv("NO_COLOR", "1")
     stream = io.StringIO()

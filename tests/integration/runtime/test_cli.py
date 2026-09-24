@@ -175,9 +175,11 @@ def test_console_trace_is_ordered_on_stderr_and_can_be_disabled() -> None:
     assert json.loads(traced.stdout)["result"]["status"] == json.loads(quiet.stdout)["result"]["status"]
     assert quiet.stderr == ""
     assert "MAS · multi-agent system" in traced.stderr
-    assert "Agent: esi1_agent" in traced.stderr
-    assert "Agent: vitals_agent" in traced.stderr
-    assert "[Tool call] final_esi1_true_handoff_to_doctor_agent" in traced.stderr
+    assert "Agent: esi1_agent | [Tool call] final_esi1_true_handoff_to_doctor_agent" in traced.stderr
+    assert "Agent: vitals_agent | [Tool call] finalise_output" in traced.stderr
+    assert "Agent: doctor_agent | [Tool call] final_answer" in traced.stderr
+    assert not any(line in {"Agent: esi1_agent", "Agent: vitals_agent", "Agent: doctor_agent"}
+                   for line in traced.stderr.splitlines())
     assert "Handoff: esi1_agent → doctor_agent" in traced.stderr
     assert "Gate: doctor_gate | ready=True" in traced.stderr
     assert traced.stderr.count("Handoff:") == 2  # ESI-1 and vitals each hand off
