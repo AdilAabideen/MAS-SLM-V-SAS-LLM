@@ -147,7 +147,9 @@ def test_every_preserved_esi_prompt_and_ordered_tool_contract_matches_baseline()
     from mas_slm_research.workflows.esi.definition import ESI_MAS
 
     registry = _registry()
-    for definition in ESI_AGENTS.values():
+    for definition_id, definition in ESI_AGENTS.items():
+        if not definition_id.endswith("_v1"):
+            continue
         modes = ("single",) if definition.name == "single_agent" else ("single", "multi")
         for mode in modes:
             schemas = {

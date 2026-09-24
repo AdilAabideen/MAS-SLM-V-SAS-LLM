@@ -172,6 +172,12 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         trace_config = loaded.experiment.telemetry.model_copy(update={
             "enabled": True if args.trace else False if args.no_trace else loaded.experiment.telemetry.enabled,
         })
+
+        def show_console(action, *values, **options):
+            try:
+                action(*values, **options)
+            except Exception as exc:
+                print(f"reporting warning: {type(exc).__name__}: {exc}", file=sys.stderr)
     if args.command == "validate":
         dataset = load_configured_dataset(loaded)
         return {"valid": True, "experiment": loaded.experiment.name,
@@ -186,17 +192,16 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         grader = require_grader(loaded.registry.resolve("graders", loaded.experiment.grader))
         identity = RunIdentity(experiment_id=str(uuid.uuid4()), system_id=args.system,
                                case_id=case.case_id, repetition=1, run_id=str(uuid.uuid4()))
-        if args.system == "single":
-            execution = await systems.sas_runner.run_case(identity=identity, payload=case.agent_input())
-        else:
-            execution = await systems.mas_runner.run_case(identity=identity, case_info=case.agent_input())
-        grade = grade_case(grader, expected=case.expected_label(), result=execution.result)
         assert renderer is not None
-        try:
-            renderer.render_case(system_id=args.system, case_id=case.case_id,
-                                 repetition=1, execution=execution, grade=grade)
-        except Exception as exc:
-            print(f"reporting warning: {type(exc).__name__}: {exc}", file=sys.stderr)
+        show_console(renderer.start_case, system_id=args.system, case_id=case.case_id, repetition=1)
+        def show_event(source, event):
+            show_console(renderer.render_event, source, event)
+        if args.system == "single":
+            execution = await systems.sas_runner.run_case(identity=identity, payload=case.agent_input(), on_event=show_event)
+        else:
+            execution = await systems.mas_runner.run_case(identity=identity, case_info=case.agent_input(), on_event=show_event)
+        grade = grade_case(grader, expected=case.expected_label(), result=execution.result)
+        show_console(renderer.finish_case, grade)
         trace = trace_case_execution(
             execution, grade=grade, config=trace_config,
             environment=environment,
@@ -226,12 +231,18 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
         def observe(attempt):
             if writer is not None:
                 writer.record_attempt(attempt)
-            renderer.render_attempt(attempt)
+            show_console(renderer.finish_case, attempt.grade)
+
+        def start_case(system_id, case_id, repetition):
+            show_console(renderer.start_case, system_id=system_id, case_id=case_id, repetition=repetition)
+
+        def show_event(source, event):
+            show_console(renderer.render_event, source, event)
 
         try:
             run = await run_configured_experiment(
                 loaded, model_factory=model_factory, environment=environment, experiment_id=experiment_id,
-                on_attempt=observe,
+                on_attempt=observe, on_case_start=start_case, on_event=show_event,
             )
             if writer is not None and writer.manifest["attempts_written"] != len(run.attempts):
                 raise ArtifactError("artifact writer missed one or more attempts")

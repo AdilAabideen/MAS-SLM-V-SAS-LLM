@@ -130,6 +130,8 @@ async def run_experiment(
     grader: GraderLike, experiment_id: str | None = None,
     cancel_requested: Callable[[], bool] | None = None,
     on_attempt: Callable[[ExperimentAttempt], None] | None = None,
+    on_case_start: Callable[[str, str, int], None] | None = None,
+    on_event: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> ExperimentRun:
     """Run all selected cases sequentially, retaining each failed arm and grade."""
     grader = require_grader(grader)
@@ -158,12 +160,27 @@ async def run_experiment(
         attempt_clock = time.perf_counter()
         execution: SingleCaseExecution | MultiCaseExecution | None = None
         cancelled = False
+
+        def report_event(source: str, event: dict[str, Any]) -> None:
+            if on_event is not None:
+                try:
+                    on_event(source, event)
+                except Exception as exc:
+                    reporting_errors.append(f"attempt {sequence} event: {type(exc).__name__}: {exc}")
+
         try:
+            if on_case_start is not None:
+                try:
+                    on_case_start(arm, case.case_id, repetition)
+                except Exception as exc:
+                    reporting_errors.append(f"attempt {sequence} start: {type(exc).__name__}: {exc}")
             facts = case.agent_input()
             if arm == "single":
-                execution = await systems.sas_runner.run_case(identity=identity, payload=facts)
+                options = {"on_event": report_event} if on_event is not None else {}
+                execution = await systems.sas_runner.run_case(identity=identity, payload=facts, **options)
             else:
-                execution = await systems.mas_runner.run_case(identity=identity, case_info=facts)
+                options = {"on_event": report_event} if on_event is not None else {}
+                execution = await systems.mas_runner.run_case(identity=identity, case_info=facts, **options)
             result = execution.result
             if result.identity != identity:
                 raise ValueError("runner returned a mismatched run identity")
@@ -212,6 +229,8 @@ async def run_configured_experiment(
     environment: Mapping[str, str] | None = None,
     experiment_id: str | None = None, cancel_requested: Callable[[], bool] | None = None,
     on_attempt: Callable[[ExperimentAttempt], None] | None = None,
+    on_case_start: Callable[[str, str, int], None] | None = None,
+    on_event: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> ExperimentRun:
     """Perform all dataset preflight checks before building or invoking models."""
     dataset = load_configured_dataset(loaded)
@@ -221,4 +240,5 @@ async def run_configured_experiment(
         loaded, dataset=dataset, systems=systems, grader=grader,
         experiment_id=experiment_id, cancel_requested=cancel_requested,
         on_attempt=on_attempt,
+        on_case_start=on_case_start, on_event=on_event,
     )

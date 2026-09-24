@@ -170,6 +170,8 @@ def test_console_trace_is_ordered_on_stderr_and_can_be_disabled() -> None:
     assert "[vitals_agent] tool_call" in traced.stderr
     assert "handoff_created -> doctor_agent" in traced.stderr
     assert "gate_evaluated doctor_gate ready=True" in traced.stderr
+    assert traced.stderr.count("handoff_created -> doctor_agent") == 2  # ESI-1 and vitals each hand off
+    assert traced.stderr.count("gate_evaluated doctor_gate ready=True") == 1
     assert traced.stderr.index("[esi1_agent] agent_started") < traced.stderr.index("[doctor_agent] agent_started")
     assert "\x1b[" not in traced.stderr
     assert "fixture-only" not in traced.stderr
@@ -190,6 +192,59 @@ def test_cli_trace_on_off_preserves_case_result() -> None:
     assert json.loads(off.stdout)["grade"]["score"] == json.loads(on.stdout)["grade"]["score"]
     assert off.stderr == ""
     assert "spans captured" in on.stderr
+
+
+def test_esi1_null_resources_finalizes_in_offline_cli(tmp_path: Path) -> None:
+    fixture = json.loads(DR7_FIXTURE.read_text(encoding="utf-8"))
+    answer = fixture["roles"]["baseline"][0]["tool_calls"][0]["args"]
+    answer.update(final_esi_level=1, decision_source="esi1_decision_point_a", predicted_resources=None)
+    path = tmp_path / "esi1-null-resources.json"
+    path.write_text(json.dumps(fixture), encoding="utf-8")
+    result = _cli("run", str(DR7_CONFIG), "--fixture", str(path),
+                  "--system", "single", "--case", "synthetic-esi1-001", "--console", "none")
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["result"]["status"] == "completed"
+    assert report["result"]["output"]["predicted_resources"] == []
+    assert report["grade"]["passed"] is True
+
+
+def test_console_emits_tool_result_before_case_finishes(tmp_path: Path) -> None:
+    fixture = json.loads(DR7_FIXTURE.read_text(encoding="utf-8"))
+    fixture["roles"]["baseline"].insert(0, {
+        "tool_calls": [{"id": "plan", "name": "create_plan", "args": {
+            "objective": "Assess synthetic case", "steps": [{"step_id": "S1", "description": "Review case"}],
+        }}],
+    })
+    fixture["roles"]["baseline"][1]["delay_ms"] = 1500
+    path = tmp_path / "delayed-stream.json"
+    path.write_text(json.dumps(fixture), encoding="utf-8")
+    process = subprocess.Popen(
+        [sys.executable, "-m", "mas_slm_research.cli", "run", str(DR7_CONFIG),
+         "--fixture", str(path), "--system", "single", "--case", "synthetic-esi1-001",
+         "--console", "events"],
+        cwd=ROOT, env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    try:
+        assert process.stderr is not None
+        lines = []
+        while "tool_result create_plan" not in "".join(lines):
+            line = process.stderr.readline()
+            assert line, "CLI ended before printing the first tool result"
+            lines.append(line)
+        assert process.poll() is None, "tool events were printed only after the case completed"
+        stdout, stderr = process.communicate(timeout=10)
+        assert process.returncode == 0, stderr
+        all_events = "".join(lines) + stderr
+        assert all_events.count("tool_call create_plan") == 1
+        assert all_events.count("tool_result create_plan") == 1
+        assert all_events.index("tool_result create_plan") < all_events.index("final: ")
+        assert json.loads(stdout)["result"]["status"] == "completed"
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
 
 
 def test_artifact_directory_recomputes_summary_and_refuses_overwrite(tmp_path: Path) -> None:

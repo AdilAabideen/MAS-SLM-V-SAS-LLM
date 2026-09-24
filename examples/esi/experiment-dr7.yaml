@@ -20,7 +20,7 @@ models:
 
 agents:
   baseline:
-    definition: esi.single_agent_v1
+    definition: esi.single_agent_v2
     model: baseline
   esi1:
     definition: esi.esi1_v1

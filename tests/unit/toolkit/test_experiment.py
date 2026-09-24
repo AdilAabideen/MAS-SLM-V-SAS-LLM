@@ -60,6 +60,22 @@ class _Runner:
         return SimpleNamespace(result=result, llm_calls=(), tool_calls=())
 
 
+def test_failing_case_start_reporter_does_not_fail_execution() -> None:
+    loaded, dataset, systems = _setup()
+    calls = []
+    systems = replace(systems, sas_runner=_Runner("single", calls), mas_runner=_Runner("multi", calls))
+
+    def broken_start(*_args):
+        raise RuntimeError("console closed")
+
+    run = asyncio.run(run_experiment(
+        loaded, dataset=dataset, systems=systems, grader=_Grader(),
+        on_case_start=broken_start,
+    ))
+    assert all(attempt.result.status == RunStatus.COMPLETED for attempt in run.attempts)
+    assert len(run.reporting_errors) == len(run.attempts)
+
+
 def _setup():
     registry = ComponentRegistry()
     register_builtin_components(registry)
